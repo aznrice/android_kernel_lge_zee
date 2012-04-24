@@ -20,6 +20,8 @@ hostprogs-$(CONFIG_KALLSYMS_LINE_LOCATIONS)     += readelf
 hostprogs-$(BUILD_C_RECORDMCOUNT) += recordmcount
 hostprogs-$(CONFIG_BUILDTIME_EXTABLE_SORT) += sortextable
 
+HOSTCFLAGS_sortextable.o = -I$(srctree)/tools/include
+
 always		:= $(hostprogs-y) $(hostprogs-m)
 
 # The following hostprogs-y programs are only build on demand
