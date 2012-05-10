@@ -3936,9 +3936,9 @@ struct kmem_cache *__kmem_cache_create(const char *name, size_t size,
 			}
 			return s;
 		}
-		kfree(n);
 		kfree(s);
 	}
+	kfree(n);
 err:
 	mutex_unlock(&slab_mutex);
 	return s;
