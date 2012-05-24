@@ -2011,9 +2011,8 @@ static void remove_tasks_in_empty_cpuset(struct cpuset *cs)
  * before dropping down to the next.  It always processes a node before
  * any of its children.
  *
- * For now, since we lack memory hot unplug, we'll never see a cpuset
- * that has tasks along with an empty 'mems'.  But if we did see such
- * a cpuset, we'd handle it just like we do if its 'cpus' was empty.
+ * In the case of memory hot-unplug, it will remove nodes from N_HIGH_MEMORY
+ * if all present pages from a node are offlined.
  */
 static void scan_for_empty_cpusets(struct cpuset *root)
 {
@@ -2093,7 +2092,7 @@ void cpuset_update_active_cpus(void)
 /*
  * Keep top_cpuset.mems_allowed tracking node_states[N_HIGH_MEMORY].
  * Call this routine anytime after node_states[N_HIGH_MEMORY] changes.
- * See also the previous routine cpuset_track_online_cpus().
+ * See cpuset_update_active_cpus() for CPU hotplug handling.
  */
 static int cpuset_track_online_nodes(struct notifier_block *self,
 				unsigned long action, void *arg)
