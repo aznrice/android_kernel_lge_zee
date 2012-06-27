@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -43,6 +43,18 @@ static DEFINE_SPINLOCK(blk_dev_test_list_lock);
 static LIST_HEAD(blk_dev_test_list);
 static struct test_data *ptd;
 
+/* Get the request after `test_rq' in the test requests list */
+static struct test_request *
+latter_test_request(struct request_queue *q,
+				 struct test_request *test_rq)
+{
+	struct test_data *td = q->elevator->elevator_data;
+
+	if (test_rq->queuelist.next == &td->test_queue)
+		return NULL;
+	return list_entry(test_rq->queuelist.next, struct test_request,
+			  queuelist);
+}
 
 /**
  * test_iosched_get_req_queue() - returns the request queue
@@ -65,56 +77,28 @@ void test_iosched_mark_test_completion(void)
 {
 	if (!ptd)
 		return;
-	test_pr_info("%s: mark test is completed, test_count=%d,",
-			__func__, ptd->test_count);
-	test_pr_info("%s: reinsert_count=%d, dispatched_count=%d",
-		     __func__, ptd->reinsert_count, ptd->dispatched_count);
 
 	ptd->test_state = TEST_COMPLETED;
 	wake_up(&ptd->wait_q);
 }
 EXPORT_SYMBOL(test_iosched_mark_test_completion);
 
-/**
- *  check_test_completion() - Check if all the queued test
- *  requests were completed
- */
-void check_test_completion(void)
+/* Check if all the queued test requests were completed */
+static void check_test_completion(void)
 {
 	struct test_request *test_rq;
+	struct request *rq;
 
-	if (!ptd)
-		goto exit;
-
-	list_for_each_entry(test_rq, &ptd->dispatched_queue, queuelist)
+	list_for_each_entry(test_rq, &ptd->test_queue, queuelist) {
+		rq = test_rq->rq;
 		if (!test_rq->req_completed)
-			goto exit;
-
-	if (!list_empty(&ptd->test_queue)
-			|| !list_empty(&ptd->reinsert_queue)
-			|| !list_empty(&ptd->urgent_queue)) {
-		test_pr_info("%s: Test still not completed,", __func__);
-		test_pr_info("%s: test_count=%d, reinsert_count=%d",
-			     __func__, ptd->test_count, ptd->reinsert_count);
-		test_pr_info("%s: dispatched_count=%d, urgent_count=%d",
-			    __func__, ptd->dispatched_count, ptd->urgent_count);
-		goto exit;
+			return;
 	}
 
-	ptd->test_info.test_duration = jiffies -
-				ptd->test_info.test_duration;
-
-	test_pr_info("%s: Test is completed, test_count=%d, reinsert_count=%d,",
-			__func__, ptd->test_count, ptd->reinsert_count);
-	test_pr_info("%s: dispatched_count=%d",
-		      __func__, ptd->dispatched_count);
+	test_pr_info("%s: Test is completed", __func__);
 
 	test_iosched_mark_test_completion();
-
-exit:
-	return;
 }
-EXPORT_SYMBOL(check_test_completion);
 
 /*
  * A callback to be called per bio completion.
@@ -124,6 +108,7 @@ static void end_test_bio(struct bio *bio, int err)
 {
 	if (err)
 		clear_bit(BIO_UPTODATE, &bio->bi_flags);
+
 	bio_put(bio);
 }
 
@@ -139,10 +124,10 @@ static void end_test_req(struct request *rq, int err)
 	test_rq = (struct test_request *)rq->elv.priv[0];
 	BUG_ON(!test_rq);
 
-	test_pr_debug("%s: request %d completed, err=%d",
+	test_pr_info("%s: request %d completed, err=%d",
 	       __func__, test_rq->req_id, err);
 
-	test_rq->req_completed = true;
+	test_rq->req_completed = 1;
 	test_rq->req_result = err;
 
 	check_test_completion();
@@ -188,9 +173,6 @@ int test_iosched_add_unique_test_req(int is_err_expcted,
 		bio->bi_size = nr_sects << 9;
 		bio->bi_sector = start_sec;
 		break;
-	case REQ_UNIQUE_SANITIZE:
-		bio->bi_rw = REQ_WRITE | REQ_SANITIZE;
-		break;
 	default:
 		test_pr_err("%s: Invalid request type %d", __func__,
 			    req_unique);
@@ -222,8 +204,8 @@ int test_iosched_add_unique_test_req(int is_err_expcted,
 		blk_put_request(rq);
 		return -ENODEV;
 	}
-	test_rq->req_completed = false;
-	test_rq->req_result = -EINVAL;
+	test_rq->req_completed = 0;
+	test_rq->req_result = -1;
 	test_rq->rq = rq;
 	test_rq->is_err_expected = is_err_expcted;
 	rq->elv.priv[0] = (void *)test_rq;
@@ -233,10 +215,7 @@ int test_iosched_add_unique_test_req(int is_err_expcted,
 		"%s: added request %d to the test requests list, type = %d",
 		__func__, test_rq->req_id, req_unique);
 
-	spin_lock_irq(ptd->req_q->queue_lock);
 	list_add_tail(&test_rq->queuelist, &ptd->test_queue);
-	ptd->test_count++;
-	spin_unlock_irq(ptd->req_q->queue_lock);
 
 	return 0;
 }
@@ -268,7 +247,8 @@ static void fill_buf_with_pattern(int *buf, int num_bytes, int pattern)
 }
 
 /**
- * test_iosched_create_test_req() - Create a read/write request.
+ * test_iosched_add_wr_rd_test_req() - Create and queue a
+ * read/write request.
  * @is_err_expcted:	A flag to indicate if this request
  *			should succeed or not
  * @direction:		READ/WRITE
@@ -292,33 +272,34 @@ static void fill_buf_with_pattern(int *buf, int num_bytes, int pattern)
  * request memory is freed at the end of the test and the
  * allocated BIO memory is freed by end_test_bio.
  */
-struct test_request *test_iosched_create_test_req(int is_err_expcted,
+int test_iosched_add_wr_rd_test_req(int is_err_expcted,
 		      int direction, int start_sec,
 		      int num_bios, int pattern, rq_end_io_fn *end_req_io)
 {
-	struct request *rq;
-	struct test_request *test_rq;
-	int rw_flags, buf_size;
-	int ret = 0, i;
+	struct request *rq = NULL;
+	struct test_request *test_rq = NULL;
+	int rw_flags = 0;
+	int buf_size = 0;
+	int ret = 0, i = 0;
 	unsigned int *bio_ptr = NULL;
 	struct bio *bio = NULL;
 
 	if (!ptd)
-		return NULL;
+		return -ENODEV;
 
 	rw_flags = direction;
 
 	rq = blk_get_request(ptd->req_q, rw_flags, GFP_KERNEL);
 	if (!rq) {
 		test_pr_err("%s: Failed to allocate a request", __func__);
-		return NULL;
+		return -ENODEV;
 	}
 
 	test_rq = kzalloc(sizeof(struct test_request), GFP_KERNEL);
 	if (!test_rq) {
 		test_pr_err("%s: Failed to allocate test request", __func__);
 		blk_put_request(rq);
-		return NULL;
+		return -ENODEV;
 	}
 
 	buf_size = sizeof(unsigned int) * BIO_U32_SIZE * num_bios;
@@ -354,7 +335,6 @@ struct test_request *test_iosched_create_test_req(int is_err_expcted,
 		rq->end_io = end_test_req;
 	rq->__sector = start_sec;
 	rq->cmd_type |= REQ_TYPE_FS;
-	rq->cmd_flags |= REQ_SORTED;
 
 	if (rq->bio) {
 		rq->bio->bi_sector = start_sec;
@@ -367,69 +347,22 @@ struct test_request *test_iosched_create_test_req(int is_err_expcted,
 	ptd->num_of_write_bios += num_bios;
 	test_rq->req_id = ptd->wr_rd_next_req_id++;
 
-	test_rq->req_completed = false;
-	test_rq->req_result = -EINVAL;
+	test_rq->req_completed = 0;
+	test_rq->req_result = -1;
 	test_rq->rq = rq;
-	if (ptd->test_info.get_rq_disk_fn)
-		test_rq->rq->rq_disk = ptd->test_info.get_rq_disk_fn();
 	test_rq->is_err_expected = is_err_expcted;
 	rq->elv.priv[0] = (void *)test_rq;
 
-	test_pr_debug("%s: created test request %d, buf_size=%d",
-			__func__, test_rq->req_id, buf_size);
+	test_pr_debug(
+		"%s: added request %d to the test requests list, buf_size=%d",
+		__func__, test_rq->req_id, buf_size);
 
-	return test_rq;
+	list_add_tail(&test_rq->queuelist, &ptd->test_queue);
+
+	return 0;
 err:
 	blk_put_request(rq);
 	kfree(test_rq->bios_buffer);
-	return NULL;
-}
-EXPORT_SYMBOL(test_iosched_create_test_req);
-
-
-/**
- * test_iosched_add_wr_rd_test_req() - Create and queue a
- * read/write request.
- * @is_err_expcted:	A flag to indicate if this request
- *			should succeed or not
- * @direction:		READ/WRITE
- * @start_sec:		start address of the first bio
- * @num_bios:		number of BIOs to be allocated for the
- *			request
- * @pattern:		A pattern, to be written into the write
- *			requests data buffer. In case of READ
- *			request, the given pattern is kept as
- *			the expected pattern. The expected
- *			pattern will be compared in the test
- *			check result function. If no comparisson
- *			is required, set pattern to
- *			TEST_NO_PATTERN.
- * @end_req_io:		specific completion callback. When not
- *			set,the default callback will be used
- *
- * This function allocates the test request and the block
- * request and calls blk_rq_map_kern which allocates the
- * required BIO. Upon success the new request is added to the
- * test_queue. The allocated test request and the block request
- * memory is freed at the end of the test and the allocated BIO
- * memory is freed by end_test_bio.
- */
-int test_iosched_add_wr_rd_test_req(int is_err_expcted,
-		      int direction, int start_sec,
-		      int num_bios, int pattern, rq_end_io_fn *end_req_io)
-{
-	struct test_request *test_rq = NULL;
-
-	test_rq = test_iosched_create_test_req(is_err_expcted,
-			direction, start_sec,
-			num_bios, pattern, end_req_io);
-	if (test_rq) {
-		spin_lock_irq(ptd->req_q->queue_lock);
-		list_add_tail(&test_rq->queuelist, &ptd->test_queue);
-		ptd->test_count++;
-		spin_unlock_irq(ptd->req_q->queue_lock);
-		return 0;
-	}
 	return -ENODEV;
 }
 EXPORT_SYMBOL(test_iosched_add_wr_rd_test_req);
@@ -492,18 +425,12 @@ static int compare_buffer_to_pattern(struct test_request *test_rq)
 static int check_test_result(struct test_data *td)
 {
 	struct test_request *test_rq;
+	struct request *rq;
 	int res = 0;
 	static int run;
 
-	if (!ptd)
-		goto err;
-
-	list_for_each_entry(test_rq, &ptd->dispatched_queue, queuelist) {
-		if (!test_rq->rq) {
-			test_pr_info("%s: req_id %d is contains empty req",
-					__func__, test_rq->req_id);
-			continue;
-		}
+	list_for_each_entry(test_rq, &ptd->test_queue, queuelist) {
+		rq = test_rq->rq;
 		if (!test_rq->req_completed) {
 			test_pr_err("%s: rq %d not completed", __func__,
 				    test_rq->req_id);
@@ -576,40 +503,26 @@ static int run_test(struct test_data *td)
 		return ret;
 	}
 
-	blk_run_queue(td->req_q);
+	/*
+	 * Set the next_req pointer to the first request in the test requests
+	 * list
+	 */
+	if (!list_empty(&td->test_queue))
+		td->next_req = list_entry(td->test_queue.next,
+					  struct test_request, queuelist);
+	__blk_run_queue(td->req_q);
 
 	return 0;
 }
 
-/*
- * free_test_queue() - Free all allocated test requests in the given test_queue:
- * free their requests and BIOs buffer
- * @test_queue		the test queue to be freed
- */
-static void free_test_queue(struct list_head *test_queue)
+/* Free the allocated test requests, their requests and BIOs buffer */
+static void free_test_requests(struct test_data *td)
 {
 	struct test_request *test_rq;
-	struct bio *bio;
-
-	while (!list_empty(test_queue)) {
-		test_rq = list_entry(test_queue->next, struct test_request,
-				queuelist);
-
+	while (!list_empty(&td->test_queue)) {
+		test_rq = list_entry(td->test_queue.next, struct test_request,
+				     queuelist);
 		list_del_init(&test_rq->queuelist);
-		/*
-		 * If the request was not completed we need to free its BIOs
-		 * and remove it from the packed list
-		 */
-		if (!test_rq->req_completed) {
-			test_pr_info(
-				"%s: Freeing memory of an uncompleted request",
-					__func__);
-			list_del_init(&test_rq->rq->queuelist);
-			while ((bio = test_rq->rq->bio) != NULL) {
-				test_rq->rq->bio = bio->bi_next;
-				bio_put(bio);
-			}
-		}
 		blk_put_request(test_rq->rq);
 		kfree(test_rq->bios_buffer);
 		kfree(test_rq);
@@ -617,39 +530,8 @@ static void free_test_queue(struct list_head *test_queue)
 }
 
 /*
- * free_test_requests() - Free all allocated test requests in
- * all test queues in given test_data.
- * @td		The test_data struct whos test requests will be
- *		freed.
- */
-static void free_test_requests(struct test_data *td)
-{
-	if (!td)
-		return;
-
-	if (td->urgent_count) {
-		free_test_queue(&td->urgent_queue);
-		td->urgent_count = 0;
-	}
-	if (td->test_count) {
-		free_test_queue(&td->test_queue);
-		td->test_count = 0;
-	}
-	if (td->dispatched_count) {
-		free_test_queue(&td->dispatched_queue);
-		td->dispatched_count = 0;
-	}
-	if (td->reinsert_count) {
-		free_test_queue(&td->reinsert_queue);
-		td->reinsert_count = 0;
-	}
-}
-
-/*
- * post_test() - Do post test operations. Free the allocated
- * test requests, their requests and BIOs buffer.
- * @td		The test_data struct for the test that has
- *		ended.
+ * Do post test operations.
+ * Free the allocated test requests, their requests and BIOs buffer.
  */
 static int post_test(struct test_data *td)
 {
@@ -690,8 +572,6 @@ static unsigned int get_timeout_msec(struct test_data *td)
 
 /**
  * test_iosched_start_test() - Prepares and runs the test.
- * The members test_duration and test_byte_count of the input
- * parameter t_info are modified by this function.
  * @t_info:	the current test testcase and callbacks
  *		functions
  *
@@ -726,8 +606,7 @@ int test_iosched_start_test(struct test_info *t_info)
 			test_pr_info(
 				"%s: Another test is running, try again later",
 				__func__);
-			spin_unlock(&ptd->lock);
-			return -EBUSY;
+			return -EINVAL;
 		}
 
 		if (ptd->start_sector == 0) {
@@ -739,6 +618,7 @@ int test_iosched_start_test(struct test_info *t_info)
 
 		memcpy(&ptd->test_info, t_info, sizeof(struct test_info));
 
+		ptd->next_req = NULL;
 		ptd->test_result = TEST_NO_RESULT;
 		ptd->num_of_write_bios = 0;
 
@@ -751,11 +631,6 @@ int test_iosched_start_test(struct test_info *t_info)
 		ptd->test_state = TEST_RUNNING;
 
 		spin_unlock(&ptd->lock);
-		/*
-		 * Give an already dispatch request from
-		 * FS a chanse to complete
-		 */
-		msleep(2000);
 
 		timeout_msec = get_timeout_msec(ptd);
 		mod_timer(&ptd->timeout_timer, jiffies +
@@ -765,7 +640,7 @@ int test_iosched_start_test(struct test_info *t_info)
 			test_name = ptd->test_info.get_test_case_str_fn(ptd);
 		else
 			test_name = "Unknown testcase";
-		test_pr_info("%s: Starting test %s", __func__, test_name);
+		test_pr_info("%s: Starting test %s\n", __func__, test_name);
 
 		ret = prepare_test(ptd);
 		if (ret) {
@@ -774,7 +649,6 @@ int test_iosched_start_test(struct test_info *t_info)
 			goto error;
 		}
 
-		ptd->test_info.test_duration = jiffies;
 		ret = run_test(ptd);
 		if (ret) {
 			test_pr_err("%s: failed to run the test\n", __func__);
@@ -784,8 +658,6 @@ int test_iosched_start_test(struct test_info *t_info)
 		test_pr_info("%s: Waiting for the test completion", __func__);
 
 		wait_event(ptd->wait_q, ptd->test_state == TEST_COMPLETED);
-		t_info->test_duration = ptd->test_info.test_duration;
-		t_info->test_byte_count = ptd->test_info.test_byte_count;
 		del_timer_sync(&ptd->timeout_timer);
 
 		ret = check_test_result(ptd);
@@ -805,7 +677,7 @@ int test_iosched_start_test(struct test_info *t_info)
 		 * Wakeup the queue thread to fetch FS requests that might got
 		 * postponded due to the test
 		 */
-		blk_run_queue(ptd->req_q);
+		__blk_run_queue(ptd->req_q);
 
 		if (ptd->ignore_round)
 			test_pr_info(
@@ -826,8 +698,9 @@ int test_iosched_start_test(struct test_info *t_info)
 		return -EINVAL;
 
 error:
-	post_test(ptd);
 	ptd->test_result = TEST_FAILED;
+	ptd->test_info.testcase = 0;
+	post_test(ptd);
 	return ret;
 }
 EXPORT_SYMBOL(test_iosched_start_test);
@@ -989,46 +862,6 @@ static void test_merged_requests(struct request_queue *q,
 {
 	list_del_init(&next->queuelist);
 }
-/*
- * test_dispatch_from(): Dispatch request from @queue to the @dispatched_queue.
- * Also update th dispatched_count counter.
- */
-static int test_dispatch_from(struct request_queue *q,
-		struct list_head *queue, unsigned int *count)
-{
-	struct test_request *test_rq;
-	struct request *rq;
-	int ret = 0;
-
-	if (!ptd)
-		goto err;
-
-	spin_lock_irq(&ptd->lock);
-	if (!list_empty(queue)) {
-		test_rq = list_entry(queue->next, struct test_request,
-				queuelist);
-		rq = test_rq->rq;
-		if (!rq) {
-			pr_err("%s: null request,return", __func__);
-			spin_unlock_irq(&ptd->lock);
-			goto err;
-		}
-		list_move_tail(&test_rq->queuelist, &ptd->dispatched_queue);
-		ptd->dispatched_count++;
-		(*count)--;
-		spin_unlock_irq(&ptd->lock);
-
-		print_req(rq);
-		elv_dispatch_sort(q, rq);
-		ptd->test_info.test_byte_count += test_rq->buf_size;
-		ret = 1;
-		goto err;
-	}
-	spin_unlock_irq(&ptd->lock);
-
-err:
-	return ret;
-}
 
 /*
  * Dispatch a test request in case there is a running test Otherwise, dispatch
@@ -1038,7 +871,6 @@ static int test_dispatch_requests(struct request_queue *q, int force)
 {
 	struct test_data *td = q->elevator->elevator_data;
 	struct request *rq = NULL;
-	int ret = 0;
 
 	switch (td->test_state) {
 	case TEST_IDLE:
@@ -1047,39 +879,27 @@ static int test_dispatch_requests(struct request_queue *q, int force)
 					queuelist);
 			list_del_init(&rq->queuelist);
 			elv_dispatch_sort(q, rq);
-			ret = 1;
-			goto exit;
+			return 1;
 		}
 		break;
 	case TEST_RUNNING:
-		if (test_dispatch_from(q, &td->urgent_queue,
-				       &td->urgent_count)) {
-			test_pr_debug("%s: Dispatched from urgent_count=%d",
-					__func__, ptd->urgent_count);
-			ret = 1;
-			goto exit;
-		}
-		if (test_dispatch_from(q, &td->reinsert_queue,
-				       &td->reinsert_count)) {
-			test_pr_debug("%s: Dispatched from reinsert_count=%d",
-					__func__, ptd->reinsert_count);
-			ret = 1;
-			goto exit;
-		}
-		if (test_dispatch_from(q, &td->test_queue, &td->test_count)) {
-			test_pr_debug("%s: Dispatched from test_count=%d",
-					__func__, ptd->test_count);
-			ret = 1;
-			goto exit;
+		if (td->next_req) {
+			rq = td->next_req->rq;
+			td->next_req =
+				latter_test_request(td->req_q, td->next_req);
+			if (!rq)
+				return 0;
+			print_req(rq);
+			elv_dispatch_sort(q, rq);
+			return 1;
 		}
 		break;
 	case TEST_COMPLETED:
 	default:
-		break;
+		return 0;
 	}
 
-exit:
-	return ret;
+	return 0;
 }
 
 static void test_add_request(struct request_queue *q, struct request *rq)
@@ -1119,7 +939,7 @@ test_latter_request(struct request_queue *q, struct request *rq)
 	return list_entry(rq->queuelist.next, struct request, queuelist);
 }
 
-static void *test_init_queue(struct request_queue *q)
+static int test_init_queue(struct request_queue *q)
 {
 	struct blk_dev_test_type *__bdt;
 
@@ -1127,14 +947,11 @@ static void *test_init_queue(struct request_queue *q)
 			     q->node);
 	if (!ptd) {
 		test_pr_err("%s: failed to allocate test data", __func__);
-		return NULL;
+		return -ENOMEM;
 	}
 	memset((void *)ptd, 0, sizeof(struct test_data));
 	INIT_LIST_HEAD(&ptd->queue);
 	INIT_LIST_HEAD(&ptd->test_queue);
-	INIT_LIST_HEAD(&ptd->dispatched_queue);
-	INIT_LIST_HEAD(&ptd->reinsert_queue);
-	INIT_LIST_HEAD(&ptd->urgent_queue);
 	init_waitqueue_head(&ptd->wait_q);
 	ptd->req_q = q;
 
@@ -1145,13 +962,15 @@ static void *test_init_queue(struct request_queue *q)
 
 	if (test_debugfs_init(ptd)) {
 		test_pr_err("%s: Failed to create debugfs files", __func__);
-		return NULL;
+		return -ENOMEM;
 	}
 
 	list_for_each_entry(__bdt, &blk_dev_test_list, list)
 		__bdt->init_fn();
 
-	return ptd;
+	q->elevator->elevator_data = ptd;
+
+	return 0;
 }
 
 static void test_exit_queue(struct elevator_queue *e)
@@ -1169,79 +988,7 @@ static void test_exit_queue(struct elevator_queue *e)
 	kfree(td);
 }
 
-/**
- * test_get_test_data() - Returns a pointer to the test_data
- * struct which keeps the current test data.
- *
- */
-struct test_data *test_get_test_data(void)
-{
-	return ptd;
-}
-EXPORT_SYMBOL(test_get_test_data);
-
-static bool test_urgent_pending(struct request_queue *q)
-{
-	return !list_empty(&ptd->urgent_queue);
-}
-
-/**
- * test_iosched_add_urgent_req() - Add an urgent test_request.
- * First mark the request as urgent, then add it to the
- * urgent_queue test queue.
- * @test_rq:		pointer to the urgent test_request to be
- *			added.
- *
- */
-void test_iosched_add_urgent_req(struct test_request *test_rq)
-{
-	spin_lock_irq(&ptd->lock);
-	test_rq->rq->cmd_flags |= REQ_URGENT;
-	list_add_tail(&test_rq->queuelist, &ptd->urgent_queue);
-	ptd->urgent_count++;
-	spin_unlock_irq(&ptd->lock);
-}
-EXPORT_SYMBOL(test_iosched_add_urgent_req);
-
-/**
- * test_reinsert_req() - Moves the @rq request from
- *			@dispatched_queue into @reinsert_queue.
- *			The @rq must be in @dispatched_queue
- * @q:		request queue
- * @rq:		request to be inserted
- *
- *
- */
-static int test_reinsert_req(struct request_queue *q,
-			     struct request *rq)
-{
-	struct test_request *test_rq;
-	int ret = -EINVAL;
-
-	if (!ptd)
-		goto exit;
-
-	if (list_empty(&ptd->dispatched_queue)) {
-			test_pr_err("%s: dispatched_queue is empty", __func__);
-			goto exit;
-	}
-
-	list_for_each_entry(test_rq, &ptd->dispatched_queue, queuelist) {
-		if (test_rq->rq == rq) {
-			list_move(&test_rq->queuelist, &ptd->reinsert_queue);
-			ptd->dispatched_count--;
-			ptd->reinsert_count++;
-			ret = 0;
-			break;
-		}
-	}
-
-exit:
-	return ret;
-}
-
 static struct elevator_type elevator_test_iosched = {
-
 	.ops = {
 		.elevator_merge_req_fn = test_merged_requests,
 		.elevator_dispatch_fn = test_dispatch_requests,
@@ -1250,8 +997,6 @@ static struct elevator_type elevator_test_iosched = {
 		.elevator_latter_req_fn = test_latter_request,
 		.elevator_init_fn = test_init_queue,
 		.elevator_exit_fn = test_exit_queue,
-		.elevator_is_urgent_fn = test_urgent_pending,
-		.elevator_reinsert_req_fn = test_reinsert_req,
 	},
 	.elevator_name = "test-iosched",
 	.elevator_owner = THIS_MODULE,
