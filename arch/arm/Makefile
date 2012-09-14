@@ -243,6 +243,7 @@ endif
 core-$(CONFIG_FPE_NWFPE)	+= arch/arm/nwfpe/
 core-$(CONFIG_FPE_FASTFPE)	+= $(FASTFPE_OBJ)
 core-$(CONFIG_VFP)		+= arch/arm/vfp/
+core-$(CONFIG_XEN)		+= arch/arm/xen/
 
 # 2013-05-02 Hyoungtaek-Lim[hyoungtaek.lim@lge.com)[g2/vmware/vzw,att]VMware Switch
 core-$(CONFIG_VMWARE_MVP)	+= arch/arm/mvp/
