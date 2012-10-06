@@ -488,6 +488,8 @@ static int msm_compr_trigger(struct snd_pcm_substream *substream, int cmd)
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 		prtd->pcm_irq_pos = 0;
+		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+			audio_ocmem_process_req(AUDIO, true);
 
 		if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 			switch (compr->info.codec_param.codec.id) {
@@ -510,6 +512,9 @@ static int msm_compr_trigger(struct snd_pcm_substream *substream, int cmd)
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 		pr_debug("SNDRV_PCM_TRIGGER_STOP\n");
+		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+			audio_ocmem_process_req(AUDIO, false);
+
 		if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 			switch (compr->info.codec_param.codec.id) {
 			case SND_AUDIOCODEC_AMRWB:
