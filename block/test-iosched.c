@@ -95,6 +95,9 @@ static void check_test_completion(void)
 			return;
 	}
 
+	ptd->test_info.test_duration = jiffies -
+				ptd->test_info.test_duration;
+
 	test_pr_info("%s: Test is completed", __func__);
 
 	test_iosched_mark_test_completion();
@@ -124,7 +127,7 @@ static void end_test_req(struct request *rq, int err)
 	test_rq = (struct test_request *)rq->elv.priv[0];
 	BUG_ON(!test_rq);
 
-	test_pr_info("%s: request %d completed, err=%d",
+	test_pr_debug("%s: request %d completed, err=%d",
 	       __func__, test_rq->req_id, err);
 
 	test_rq->req_completed = true;
@@ -681,7 +684,7 @@ int test_iosched_start_test(struct test_info *t_info)
 
 		wait_event(ptd->wait_q, ptd->test_state == TEST_COMPLETED);
 		del_timer_sync(&ptd->timeout_timer);
-
+		t_info->test_duration = ptd->test_info.test_duration;
 		ret = check_test_result(ptd);
 		if (ret) {
 			test_pr_err("%s: check_test_result failed\n",
@@ -689,6 +692,7 @@ int test_iosched_start_test(struct test_info *t_info)
 			goto error;
 		}
 
+		ptd->test_info.test_duration = jiffies;
 		ret = post_test(ptd);
 		if (ret) {
 			test_pr_err("%s: post_test failed\n", __func__);
