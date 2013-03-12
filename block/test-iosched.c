@@ -573,7 +573,7 @@ static int run_test(struct test_data *td)
 		return ret;
 	}
 
-	blk_run_queue(td->req_q);
+	__blk_run_queue(td->req_q);
 
 	return 0;
 }
@@ -802,7 +802,7 @@ int test_iosched_start_test(struct test_info *t_info)
 		 * Wakeup the queue thread to fetch FS requests that might got
 		 * postponded due to the test
 		 */
-		blk_run_queue(ptd->req_q);
+		__blk_run_queue(ptd->req_q);
 
 		if (ptd->ignore_round)
 			test_pr_info(
@@ -1195,7 +1195,7 @@ static bool test_urgent_pending(struct request_queue *q)
 void test_iosched_add_urgent_req(struct test_request *test_rq)
 {
 	spin_lock_irq(&ptd->lock);
-	blk_mark_rq_urgent(test_rq->rq);
+	test_rq->rq->cmd_flags |= REQ_URGENT;
 	list_add_tail(&test_rq->queuelist, &ptd->urgent_queue);
 	ptd->urgent_count++;
 	spin_unlock_irq(&ptd->lock);
