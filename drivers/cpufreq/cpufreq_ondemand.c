@@ -154,6 +154,7 @@ static struct dbs_tuners {
 	unsigned int middle_grid_load;
 	unsigned int high_grid_load;
 	unsigned int debug_mask;
+	unsigned int input_boost;
 } dbs_tuners_ins = {
 	.up_threshold_multi_core = DEF_FREQUENCY_UP_THRESHOLD,
 	.up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
@@ -171,6 +172,7 @@ static struct dbs_tuners {
 	.optimal_freq = 0,
 	.optimal_max_freq = DEF_OPTIMAL_FREQ,
 	.debug_mask=0,
+	.input_boost = 0,
 };
 
 #if defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_KDDI) || defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
@@ -345,6 +347,7 @@ show_one(high_grid_load, high_grid_load);
 show_one(sync_freq, sync_freq);
 show_one(optimal_max_freq, optimal_max_freq);
 show_one(debug_mask,debug_mask);
+show_one(input_boost, input_boost);
 
 static ssize_t show_powersave_bias
 (struct kobject *kobj, struct attribute *attr, char *buf)
@@ -419,6 +422,18 @@ static ssize_t store_sampling_rate(struct kobject *a, struct attribute *b,
 	if (ret != 1)
 		return -EINVAL;
 	update_sampling_rate(input);
+	return count;
+}
+
+static ssize_t store_input_boost(struct kobject *a, struct attribute *b,
+				const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+	if (ret != 1)
+		return -EINVAL;
+	dbs_tuners_ins.input_boost = input;
 	return count;
 }
 
@@ -790,6 +805,7 @@ define_one_global_rw(high_grid_step);
 define_one_global_rw(middle_grid_load);
 define_one_global_rw(high_grid_load);
 define_one_global_rw(debug_mask);
+define_one_global_rw(input_boost);
 
 static struct attribute *dbs_attributes[] = {
 	&sampling_rate_min.attr,
@@ -810,6 +826,7 @@ static struct attribute *dbs_attributes[] = {
 	&middle_grid_load.attr,
 	&high_grid_load.attr,
 	&debug_mask.attr,
+	&input_boost.attr,
 	NULL
 };
 
@@ -1158,6 +1175,7 @@ static void dbs_refresh_callback(struct work_struct *work)
 	extern int boo;
 	int def_touch_boost_freq = 2265600;
 #endif
+	unsigned int target_freq;
 
 	dbs_work = container_of(work, struct dbs_work_struct, work);
 	cpu = dbs_work->cpu;
@@ -1208,14 +1226,19 @@ static void dbs_refresh_callback(struct work_struct *work)
 		}
 	}
 #else
-	if (policy->cur < policy->max) {
+	if (dbs_tuners_ins.input_boost)
+		target_freq = dbs_tuners_ins.input_boost;
+	else
+		target_freq = policy->max;
+
+	if (policy->cur < target_freq) {
 		/*
 		 * Arch specific cpufreq driver may fail.
 		 * Don't update governor frequency upon failure.
 		 */
-		if (__cpufreq_driver_target(policy, policy->max,
+		if (__cpufreq_driver_target(policy, target_freq,
 					CPUFREQ_RELATION_L) >= 0)
-			policy->cur = policy->max;
+			policy->cur = target_freq;
 
 		this_dbs_info->prev_cpu_idle = get_cpu_idle_time(cpu,
 				&this_dbs_info->prev_cpu_wall);
