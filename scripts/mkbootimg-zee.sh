@@ -34,8 +34,8 @@ KERNEL_PATH=$(gettop)
 
 echo $KERNEL_PATH
 
-$KERNEL_PATH/scripts/lg_dt_viewer/lg_dtc -p 2048 -O dtb -o $KERNEL_PATH/arch/arm/boot/msm8974-v2-z-att.dtb $KERNEL_PATH/arch/arm/boot/dts/msm8974-z-att/msm8974-v2-z-att.dts
-$KERNEL_PATH/scripts/lg_dt_viewer/lg_dtc -p 2048 -O dtb -o $KERNEL_PATH/arch/arm/boot/msm8974-z-att.dtb $KERNEL_PATH/arch/arm/boot/dts/msm8974-z-att/msm8974-z-att.dts
+$KERNEL_PATH/scripts/lg_dt_viewer/lg_dtc -p 1024 -O dtb -o $KERNEL_PATH/arch/arm/boot/msm8974-v2-z-att.dtb $KERNEL_PATH/arch/arm/boot/dts/msm8974-z-att/msm8974-v2-z-att.dts
+$KERNEL_PATH/scripts/lg_dt_viewer/lg_dtc -p 1024 -O dtb -o $KERNEL_PATH/arch/arm/boot/msm8974-z-att.dtb $KERNEL_PATH/arch/arm/boot/dts/msm8974-z-att/msm8974-z-att.dts
 $KERNEL_PATH/scripts/dtbTool -s 2048 -o $KERNEL_PATH/arch/arm/boot/dt.img -p $KERNEL_PATH/scripts/dtc/ $KERNEL_PATH/arch/arm/boot/
 chmod a+r $KERNEL_PATH/arch/arm/boot/dt.img
 $KERNEL_PATH/scripts/mkbootimg  --kernel $KERNEL_PATH/arch/arm/boot/zImage --ramdisk $KERNEL_PATH/arch/arm/boot/ramdisk.img \
