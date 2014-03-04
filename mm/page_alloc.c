@@ -5803,28 +5803,26 @@ void set_pageblock_flags_group(struct page *page, unsigned long flags,
 }
 
 /*
- * This function checks whether pageblock includes unmovable pages or not.
- * If @count is not zero, it is okay to include less @count unmovable pages
- *
- * PageLRU check wihtout isolation or lru_lock could race so that
- * MIGRATE_MOVABLE block might include unmovable pages. It means you can't
- * expect this function should be exact.
+ * This is designed as sub function...plz see page_isolation.c also.
+ * set/clear page block's type to be ISOLATE.
+ * page allocater never alloc memory from ISOLATE block.
  */
-static bool
-__has_unmovable_pages(struct zone *zone, struct page *page, int count)
+
+static int
+__count_immobile_pages(struct zone *zone, struct page *page, int count)
 {
 	unsigned long pfn, iter, found;
 	int mt;
 
 	/*
 	 * For avoiding noise data, lru_add_drain_all() should be called
-	 * If ZONE_MOVABLE, the zone never contains unmovable pages
+	 * If ZONE_MOVABLE, the zone never contains immobile pages
 	 */
 	if (zone_idx(zone) == ZONE_MOVABLE)
-		return false;
+		return true;
 	mt = get_pageblock_migratetype(page);
 	if (mt == MIGRATE_MOVABLE || is_migrate_cma(mt))
-		return false;
+		return true;
 
 	pfn = page_to_pfn(page);
 	for (found = 0, iter = 0; iter < pageblock_nr_pages; iter++) {
@@ -5855,9 +5853,9 @@ __has_unmovable_pages(struct zone *zone, struct page *page, int count)
 		 * page at boot.
 		 */
 		if (found > count)
-			return true;
+			return false;
 	}
-	return false;
+	return true;
 }
 
 bool is_pageblock_removable_nolock(struct page *page)
@@ -5881,7 +5879,7 @@ bool is_pageblock_removable_nolock(struct page *page)
 			zone->zone_start_pfn + zone->spanned_pages <= pfn)
 		return false;
 
-	return !__has_unmovable_pages(zone, page, 0);
+	return __count_immobile_pages(zone, page, 0);
 }
 
 int set_migratetype_isolate(struct page *page)
@@ -5920,12 +5918,12 @@ int set_migratetype_isolate(struct page *page)
 	 * FIXME: Now, memory hotplug doesn't call shrink_slab() by itself.
 	 * We just check MOVABLE pages.
 	 */
-	if (!__has_unmovable_pages(zone, page, arg.pages_found))
+	if (__count_immobile_pages(zone, page, arg.pages_found))
 		ret = 0;
+
 	/*
-	 * Unmovable means "not-on-lru" pages. If Unmovable pages are
-	 * larger than removable-by-driver pages reported by notifier,
-	 * we'll fail.
+	 * immobile means "not-on-lru" paes. If immobile is larger than
+	 * removable-by-driver pages reported by notifier, we'll fail.
 	 */
 
 out:
