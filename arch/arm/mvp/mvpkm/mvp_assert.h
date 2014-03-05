@@ -77,7 +77,7 @@
 #else
 #define ASSERT_ON_COMPILE(e) do {					\
 	enum { AssertOnCompileMisused = ((e) ? 1 : -1) };		\
-	typedef char AssertOnCompileFailed[AssertOnCompileMisused];	\
+	typedef char AssertOnCompileFailed[AssertOnCompileMisused] __attribute__((unused));	\
 } while (0)
 #endif
 
