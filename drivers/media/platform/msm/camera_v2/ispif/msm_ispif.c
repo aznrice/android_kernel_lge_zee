@@ -883,6 +883,12 @@ static irqreturn_t msm_io_ispif_irq(int irq_num, void *data)
 {
 	struct ispif_irq_status irq[VFE_MAX];
 
+	if (VFE1 < VFE_MAX) {
+		irq[VFE1].ispifIrqStatus0 = 0;
+		irq[VFE1].ispifIrqStatus1 = 0;
+		irq[VFE1].ispifIrqStatus2 = 0;
+	}
+
 	msm_ispif_read_irq_status(irq, data);
 	return IRQ_HANDLED;
 }
