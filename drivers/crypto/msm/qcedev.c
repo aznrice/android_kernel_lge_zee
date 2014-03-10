@@ -1538,10 +1538,12 @@ static int qcedev_vbuf_ablk_cipher(struct qcedev_async_req *areq,
 				creq->data_len = total;
 				if (i > 0)
 					for (k = 0; k < num_entries; k++) {
-						creq->vbuf.src[k].len =
-						creq->vbuf.src[i+k].len;
-						creq->vbuf.src[k].vaddr =
-						creq->vbuf.src[i+k].vaddr;
+						if (i+k < QCEDEV_MAX_BUFFERS) {
+							creq->vbuf.src[k].len =
+							creq->vbuf.src[i+k].len;
+							creq->vbuf.src[k].vaddr =
+							creq->vbuf.src[i+k].vaddr;
+						}
 					}
 				creq->entries =  num_entries;
 
