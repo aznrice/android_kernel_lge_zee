@@ -345,9 +345,9 @@ static ssize_t MvpkmAttrStore(struct kobject *kobj,
                               const char *buf,
                               size_t count);
 
-static void MvpkmKObjRelease(struct kobject *kobj)
-   __attribute__ ((optimize ("-fomit-frame-pointer")));
-
+/*static void MvpkmKObjRelease(struct kobject *kobj)
+/   __attribute__ ((optimize ("-fomit-frame-pointer")));
+*/
 
 /**
  * @brief Releases the vm structure containing the kobject.
