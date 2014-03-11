@@ -1,3 +1,6 @@
+ifdef CONFIG_CC_OPTIMIZE_FOR_PERF
+CFLAGS_msm-pcm-routing-v2.o += -Wno-array-bounds
+endif
 snd-soc-qdsp6v2-objs += msm-dai-q6-v2.o msm-pcm-q6-v2.o msm-pcm-routing-v2.o \
 			msm-compr-q6-v2.o msm-multi-ch-pcm-q6-v2.o \
 			msm-pcm-lpa-v2.o msm-pcm-afe-v2.o msm-pcm-voip-v2.o \
