@@ -4,7 +4,7 @@ SOURCE_DIR="/home/hieu/kernel/zee"
 #crosscompile stuff
 CROSSARCH="arm"
 CROSSCC="$CROSSARCH-eabi-"
-TOOLCHAIN="/home/hieu/toolchains/prebuilts/linaro-4.9/bin"
+TOOLCHAIN="/home/hieu/toolchains/prebuilts/boosted-4.9/bin"
 #our used directories
 #PREBUILT="/PATH/TO/PREBUILTS/MEANING/ZIPCONTENTS/prebuilt"
 OUT_DIR="/home/hieu/kernel/zee/out"
@@ -117,7 +117,7 @@ cp arch/arm/boot/boot.img $OUT_DIR/
 echo "[BUILD]: Copying modules (*.ko) to $OUT_DIR/modules/...";
 find $SOURCE_DIR/ -name \*.ko -exec cp '{}' $OUT_DIR/modules/ ';'
 echo "[BUILD]: Stripping modules";
-/home/hieu/toolchains/prebuilts/linaro-4.9/bin/arm-eabi-strip --strip-unneeded $OUT_DIR/modules/*.ko;
+/home/hieu/toolchains/prebuilts/boosted-4.9/bin/arm-eabi-strip --strip-unneeded $OUT_DIR/modules/*.ko;
 echo "[BUILD]: Done!...";
 
 gotoout
