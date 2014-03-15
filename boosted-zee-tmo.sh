@@ -108,7 +108,7 @@ echo "[BUILD]: Done!...";
 
 #make bootimg
 echo "[BUILD]: Bootimg (Bootimg) to $OUT_DIR/...";
-bash scripts/mkbootimg-zee.sh
+bash scripts/mkbootimg-zee-tmo.sh
 
 
 #copy stuff for our zip
@@ -123,12 +123,12 @@ echo "[BUILD]: Done!...";
 gotoout
 
 #create zip and clean folder
-echo "[BUILD]: Creating zip: kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip ...";
-zip -r kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip . -x "*.zip" "*.sha1" "*.md5"
+echo "[BUILD]: Creating zip: tmo_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip ...";
+zip -r tmo_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip . -x "*.zip" "*.sha1" "*.md5"
 
 
 echo "[BUILD]: Creating sha1 & md5 sums...";
-md5sum kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip > kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip.md5
-sha1sum kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip > kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip.sha1
+md5sum tmo_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip > tmo_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip.md5
+sha1sum tmo_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip > tmo_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip.sha1
 
 echo "[BUILD]: All done!...";
