@@ -123,12 +123,12 @@ echo "[BUILD]: Done!...";
 gotoout
 
 #create zip and clean folder
-echo "[BUILD]: Creating zip: kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip ...";
-zip -r kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip . -x "*.zip" "*.sha1" "*.md5"
+echo "[BUILD]: Creating zip: att_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip ...";
+zip -r att_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip . -x "*.zip" "*.sha1" "*.md5"
 
 
 echo "[BUILD]: Creating sha1 & md5 sums...";
-md5sum kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip > kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip.md5
-sha1sum kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip > kernel_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip.sha1
+md5sum att_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip > att_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip.md5
+sha1sum att_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip > att_"$CODENAME"_"$DATE"_"$BRANCH"-"$REV".zip.sha1
 
 echo "[BUILD]: All done!...";
