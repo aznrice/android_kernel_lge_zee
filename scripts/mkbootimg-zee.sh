@@ -34,11 +34,8 @@ KERNEL_PATH=$(gettop)
 
 echo $KERNEL_PATH
 
-$KERNEL_PATH/scripts/lg_dt_viewer/lg_dtc -p 1024 -O dtb -o $KERNEL_PATH/arch/arm/boot/msm8974-v2-z-att.dtb $KERNEL_PATH/arch/arm/boot/dts/msm8974-z-att/msm8974-v2-z-att.dts
-$KERNEL_PATH/scripts/lg_dt_viewer/lg_dtc -p 1024 -O dtb -o $KERNEL_PATH/arch/arm/boot/msm8974-z-att.dtb $KERNEL_PATH/arch/arm/boot/dts/msm8974-z-att/msm8974-z-att.dts
-$KERNEL_PATH/scripts/dtbTool -s 2048 -o $KERNEL_PATH/arch/arm/boot/dt.img -p $KERNEL_PATH/scripts/dtc/ $KERNEL_PATH/arch/arm/boot/
-chmod a+r $KERNEL_PATH/arch/arm/boot/dt.img
+chmod a+r $KERNEL_PATH/arch/arm/boot/dtatt.img
 $KERNEL_PATH/scripts/mkbootimg  --kernel $KERNEL_PATH/arch/arm/boot/zImage --ramdisk $KERNEL_PATH/arch/arm/boot/ramdisk.img \
-	--cmdline "console=ttyHSL1,115200,n8 androidboot.hardware=z user_debug=31 msm_rtb.filter=0x0 cont_splash_enabled=true" \
+	--cmdline "console=ttyHSL0,115200,n8 androidboot.hardware=z user_debug=31 msm_rtb.filter=0x0 cont_splash_enabled=true" \
 	--base 0x00000000 --pagesize 2048 --tags-addr 0x04800000 --offset 0x05000000 \
-	--dt $KERNEL_PATH/arch/arm/boot/dt.img --output $KERNEL_PATH/arch/arm/boot/boot.img
+	--dt $KERNEL_PATH/arch/arm/boot/dtatt.img --output $KERNEL_PATH/arch/arm/boot/boot.img
