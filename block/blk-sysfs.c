@@ -219,7 +219,7 @@ queue_show_##name(struct request_queue *q, char *page)			\
 static ssize_t								\
 queue_store_##name(struct request_queue *q, const char *page, size_t count) \
 {									\
-	unsigned long val;						\
+	unsigned long val = 0;						\
 	ssize_t ret;							\
 	ret = queue_var_store(&val, page, count);			\
 	if (neg)							\
