@@ -1,3 +1,6 @@
+ifdef CONFIG_CC_OPTIMIZE_FOR_PERF
+CFLAGS_adreno_ringbuffer.o += -Og
+endif
 ccflags-y := -Iinclude/uapi/drm -Iinclude/drm -Idrivers/gpu/msm
 
 msm_kgsl_core-y = \
