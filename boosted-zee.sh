@@ -89,7 +89,7 @@ gotoout() {
 gotoout
 
 echo "[BUILD]: Cleaning $OUT_DIR...";
-rm *.zip *.md5 *.sh1
+rm *.zip *.md5 *.sha1
 
 gotosource
 
