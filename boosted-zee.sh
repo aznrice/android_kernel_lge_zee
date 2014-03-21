@@ -76,6 +76,11 @@ gotosource() {
   cd $SOURCE_DIR
 }
 
+gotokcontrolgpu() {
+  echo "[BUILD]: Changing directory to $SOURCE_DIR...";
+  cd $SOURCE_DIR/kcontrol
+}
+
 gotoout() {
   echo "[BUILD]: Changing directory to $OUT_DIR...";
   cd $OUT_DIR
@@ -110,6 +115,15 @@ echo "[BUILD]: Done!...";
 echo "[BUILD]: Bootimg (Bootimg) to $OUT_DIR/...";
 bash scripts/mkbootimg-zee.sh
 
+gotokcontrolgpu
+
+echo "[BUILD]: Updating KERNEL_BUILD inside the Makefile...";
+sed -i '/KERNEL_BUILD := /c\KERNEL_BUILD := ../' Makefile
+echo "[BUILD]: Building KControl MSM gpu module...";
+make || { return 1; }
+echo "[BUILD]: Done with kcontrol's MSM gpu module!...";
+
+gotosource
 
 #copy stuff for our zip
 echo "[BUILD]: Copying kernel (Bootimg) to $OUT_DIR/...";
