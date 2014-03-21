@@ -476,9 +476,9 @@ static int test_err_check(struct mmc_card *card, struct mmc_async_req *areq)
 		 * Since in this testcase num_requests is always >= 2,
 		 * we can be sure that packed_fail_idx is always >= 1
 		 */
-		mq_rq->packed->idx_failure = (mbtd->num_requests / 2);
+		mq_rq->packed_fail_idx = (mbtd->num_requests / 2);
 		pr_info("%s: packed_fail_idx = %d"
-			, __func__, mq_rq->packed->idx_failure);
+			, __func__, mq_rq->packed_fail_idx);
 		mq->err_check_fn = NULL;
 		ret = MMC_BLK_PARTIAL;
 		break;
@@ -491,9 +491,9 @@ static int test_err_check(struct mmc_card *card, struct mmc_async_req *areq)
 			 * Since in this testcase num_requests is always >= 3,
 			 * we have that packed_fail_idx is always >= 1
 			 */
-			mq_rq->packed->idx_failure = (mbtd->num_requests / 2);
+			mq_rq->packed_fail_idx = (mbtd->num_requests / 2);
 			pr_info("%s: packed_fail_idx = %d"
-				, __func__, mq_rq->packed->idx_failure);
+				, __func__, mq_rq->packed_fail_idx);
 			ret = MMC_BLK_PARTIAL;
 			break;
 		}
@@ -515,7 +515,7 @@ static int test_err_check(struct mmc_card *card, struct mmc_async_req *areq)
 		break;
 	case TEST_RET_PARTIAL_MAX_FAIL_IDX:
 		pr_info("%s: return partial max fail_idx", __func__);
-		mq_rq->packed->idx_failure = max_packed_reqs - 1;
+		mq_rq->packed_fail_idx = max_packed_reqs - 1;
 		mq->err_check_fn = NULL;
 		ret = MMC_BLK_PARTIAL;
 		break;
@@ -1650,7 +1650,7 @@ static int prepare_write_discard_sanitize_read(struct test_data *td)
 	if (mbtd->random_test_seed == 0) {
 		mbtd->random_test_seed =
 			(unsigned int)(get_jiffies_64() & 0xFFFF);
-		test_pr_info("%s: got seed from jiffies %d",
+		pr_info("%s: got seed from jiffies %d",
 			     __func__, mbtd->random_test_seed);
 	}
 	num_bios_seed = &mbtd->random_test_seed;
@@ -1661,7 +1661,7 @@ static int prepare_write_discard_sanitize_read(struct test_data *td)
 
 		/* DISCARD */
 		total_bios += num_of_bios;
-		test_pr_info("%s: discard req: id=%d, startSec=%d, NumBios=%d",
+		pr_info("%s: discard req: id=%d, startSec=%d, NumBios=%d",
 		       __func__, td->unique_next_req_id, start_sector,
 			     num_of_bios);
 		test_iosched_add_unique_test_req(0, REQ_UNIQUE_DISCARD,
@@ -1670,9 +1670,9 @@ static int prepare_write_discard_sanitize_read(struct test_data *td)
 
 	} while (++i < (BLKDEV_MAX_RQ-10));
 
-	test_pr_info("%s: total discard bios = %d", __func__, total_bios);
+	pr_info("%s: total discard bios = %d", __func__, total_bios);
 
-	test_pr_info("%s: add sanitize req", __func__);
+	pr_info("%s: add sanitize req", __func__);
 	test_iosched_add_unique_test_req(0, REQ_UNIQUE_SANITIZE, 0, 0, NULL);
 
 	return 0;
@@ -2648,7 +2648,7 @@ static ssize_t write_discard_sanitize_test_write(struct file *file,
 	if (number <= 0)
 		number = 1;
 
-	test_pr_info("%s: -- write_discard_sanitize TEST --\n", __func__);
+	pr_info("%s: -- write_discard_sanitize TEST --\n", __func__);
 
 	memset(&mbtd->test_info, 0, sizeof(struct test_info));
 
@@ -2660,8 +2660,8 @@ static ssize_t write_discard_sanitize_test_write(struct file *file,
 	mbtd->test_info.timeout_msec = SANITIZE_TEST_TIMEOUT;
 
 	for (i = 0 ; i < number ; ++i) {
-		test_pr_info("%s: Cycle # %d / %d\n", __func__, i+1, number);
-		test_pr_info("%s: ===================", __func__);
+		pr_info("%s: Cycle # %d / %d\n", __func__, i+1, number);
+		pr_info("%s: ===================", __func__);
 
 		mbtd->test_info.testcase = TEST_WRITE_DISCARD_SANITIZE_READ;
 		ret = test_iosched_start_test(&mbtd->test_info);
