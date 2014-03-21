@@ -86,6 +86,11 @@ gotoout() {
   cd $OUT_DIR
 }
 
+gotoout
+
+echo "[BUILD]: Cleaning $OUT_DIR...";
+rm *.zip *.md5 *.sh1
+
 gotosource
 
 #Checking out latest upstream changes
