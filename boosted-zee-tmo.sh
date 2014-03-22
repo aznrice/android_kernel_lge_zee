@@ -22,7 +22,7 @@ NRJOBS=$(( $(nproc) * 2 ))
 
 #if we are not called with an argument, default to branch master
 if [ -z "$1" ]; then
-  BRANCH="caf-3.10-staging"
+  BRANCH="exp"
   echo "[BUILD]: WARNING: Not called with branchname, defaulting to $BRANCH!";
   echo "[BUILD]: If this is not what you want, call this script with the 
 branchname.";
