@@ -47,7 +47,7 @@ make_env = os.environ
 make_env.update({
         'ARCH': 'arm',
         'KCONFIG_NOTIMESTAMP': 'true' })
-make_env.setdefault('CROSS_COMPILE', 'arm-none-linux-gnueabi-')
+make_env.setdefault('CROSS_COMPILE', 'arm-eabi-')
 all_options = {}
 
 def error(msg):
