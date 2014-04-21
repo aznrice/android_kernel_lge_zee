@@ -4,7 +4,7 @@ SOURCE_DIR="/home/hieu/kernel/zee"
 #crosscompile stuff
 CROSSARCH="arm"
 CROSSCC="$CROSSARCH-eabi-"
-TOOLCHAIN="/home/hieu/toolchains/prebuilts/boosted-4.9/bin"
+TOOLCHAIN="/home/hieu/illusion/prebuilts/gcc/linux-x86/arm/arm-eabi-4.6/bin"
 #our used directories
 #PREBUILT="/PATH/TO/PREBUILTS/MEANING/ZIPCONTENTS/prebuilt"
 OUT_DIR="/home/hieu/kernel/zee/out"
