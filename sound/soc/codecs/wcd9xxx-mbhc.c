@@ -1397,7 +1397,7 @@ wcd9xxx_find_plug_type(struct wcd9xxx_mbhc *mbhc,
 	int ch;
 	enum wcd9xxx_mbhc_plug_type type;
 	int vdce;
-	struct wcd9xxx_mbhc_detect *d, *dprev, *dgnd = NULL, *dvddio = NULL;
+	struct wcd9xxx_mbhc_detect *d, *dprev = NULL, *dgnd = NULL, *dvddio = NULL;
 	int maxv = 0, minv = 0;
 	const struct wcd9xxx_mbhc_plug_type_cfg *plug_type =
 	    WCD9XXX_MBHC_CAL_PLUG_TYPE_PTR(mbhc->mbhc_cfg->calibration);
