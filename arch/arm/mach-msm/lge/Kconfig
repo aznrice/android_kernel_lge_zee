@@ -97,7 +97,7 @@ config MACH_MSM8974_G2_OPEN_COM
 config MACH_MSM8974_G2_OPT_AU
 	depends on ARCH_MSM8974
 	select MACH_LGE
-	bool "MSM8974 G2 OPT AU"
+	bool "MSM8974 G2 OPT_AU"
 	help
 	  Support for the Qualcomm MSM8974 G2 OPEN device.
 
@@ -171,6 +171,13 @@ config MACH_MSM8974_Z_US
 	help
 	  Support for the Qualcomm MSM8974 Z United State device.
 
+config MACH_MSM8974_Z_CN
+	depends on ARCH_MSM8974
+	select MACH_LGE
+	bool "MSM8974 Z CN"
+	help
+	  Support for the Qualcomm MSM8974 Z China device.
+
 config MACH_MSM8974_Z_SPR
 	depends on ARCH_MSM8974
 	select MACH_LGE
@@ -197,7 +204,14 @@ config MACH_MSM8974_Z_OPEN_COM
 	select MACH_LGE
 	bool "MSM8974 Z OPEN COM"
 	help
-	  Support for the Qualcomm MSM8974 Z ATT device.
+	  Support for the Qualcomm MSM8974 Z OPEN device.
+
+config MACH_MSM8974_Z_CTC_CN
+	depends on ARCH_MSM8974
+	select MACH_LGE
+	bool "MSM8974 Z CTC CN"
+	help
+	  Support for the Qualcomm MSM8974 Z CTC device.
 
 config MACH_MSM8974_VU3_KR
 	depends on ARCH_MSM8974
@@ -255,7 +269,76 @@ config MACH_MSM8974_Z_KDDI
 	help
 	  Support for the Qualcomm MSM8974 Z KDDI device.
 
+config MACH_MSM8974_B1_KR
+        depends on ARCH_MSM8974
+        select MACH_LGE
+        bool "MSM8974 B1 KR"
+        help
+          Support for the Qualcomm MSM8974 B1 Korea device.
+
+config MACH_MSM8974_B1_LGU
+        depends on ARCH_MSM8974
+        select MACH_LGE
+        bool "MSM8974 B1 LGU"
+        help
+          Support for the Qualcomm MSM8974 B1 LG Uplus device.
+
+config MACH_MSM8974_B1_SKT
+        depends on ARCH_MSM8974
+        select MACH_LGE
+        bool "MSM8974 B1 SKT"
+        help
+          Support for the Qualcomm MSM8974 B1 SKT device.
+
+config MACH_MSM8974_B1_KT
+        depends on ARCH_MSM8974
+        select MACH_LGE
+        bool "MSM8974 B1 KT"
+        help
+          Support for the Qualcomm MSM8974 B1 KT device.
+
+config MACH_MSM8974_B1W
+        depends on ARCH_MSM8974
+        select MACH_LGE
+        bool "MSM8974 B1W"
+        help
+          Support for the Qualcomm MSM8974 B1W device.
+
+config MACH_MSM8974_B1W_OPEN_TW
+        depends on ARCH_MSM8974
+        select MACH_LGE
+        bool "MSM8974 B1W OPEN TW"
+        help
+          Support for the Qualcomm MSM8974 B1W OPEN TW device.
+
+config MACH_MSM8974_B1W_OPEN_COM
+        depends on ARCH_MSM8974
+        select MACH_LGE
+        bool "MSM8974 B1W OPEN COM"
+        help
+          Support for the Qualcomm MSM8974 B1W OPEN COM device.
+
+config MACH_MSM8974_B1W_OPEN_SG
+        depends on ARCH_MSM8974
+        select MACH_LGE
+        bool "MSM8974 B1W OPEN SG"
+        help
+          Support for the Qualcomm MSM8974 B1W OPEN SG device.
+
+config MACH_MSM8974_B1W_OPEN_HK
+        depends on ARCH_MSM8974
+        select MACH_LGE
+        bool "MSM8974 B1W OPEN HK"
+        help
+          Support for the Qualcomm MSM8974 B1W OPEN HK device.
+
 endmenu
+
+config DTS_TARGET
+	string "DTS target dir"
+	help
+	  CONFIG_DTS_TARGET should be set to support appended dts.
+	  ex) CONFIG_DTS_TARGET="msm8974-g2-kr".
 
 menu "LGE Specific Patches"
 
