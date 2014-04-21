@@ -134,10 +134,18 @@ static int wfd_vidbuf_queue_setup(struct vb2_queue *q,
 
 static void wfd_vidbuf_wait_prepare(struct vb2_queue *q)
 {
+	struct file *priv_data = (struct file *)(q->drv_priv);
+	struct wfd_inst *inst = file_to_inst(priv_data);
+
+	mutex_unlock(&inst->vb2_lock);
 }
 
 static void wfd_vidbuf_wait_finish(struct vb2_queue *q)
 {
+	struct file *priv_data = (struct file *)(q->drv_priv);
+	struct wfd_inst *inst = file_to_inst(priv_data);
+
+	mutex_lock(&inst->vb2_lock);
 }
 
 static unsigned long wfd_enc_addr_to_mdp_addr(struct wfd_inst *inst,
@@ -715,10 +723,18 @@ static int wfd_vidbuf_stop_streaming(struct vb2_queue *q)
 	if (rc)
 		WFD_MSG_ERR("Failed to stop MDP\n");
 
+#ifndef CONFIG_MACH_LGE
 	rc = v4l2_subdev_call(&wfd_dev->enc_sdev, core, ioctl,
 			ENCODE_FLUSH, (void *)inst->venc_inst);
 	if (rc)
 		WFD_MSG_ERR("Failed to flush encoder\n");
+#endif
+
+	 rc = v4l2_subdev_call(&wfd_dev->enc_sdev, core, ioctl, 
+	 ENCODE_FLUSH, (void *)inst->venc_inst); 
+	 if (rc) 
+	 	WFD_MSG_ERR("Failed to flush encoder\n"); 
+	 	
 
 	WFD_MSG_DBG("vsg stop\n");
 	rc = v4l2_subdev_call(&wfd_dev->vsg_sdev, core, ioctl,
@@ -728,7 +744,6 @@ static int wfd_vidbuf_stop_streaming(struct vb2_queue *q)
 
 	complete(&inst->stop_mdp_thread);
 	kthread_stop(inst->mdp_task);
-
 	WFD_MSG_DBG("enc stop\n");
 	rc = v4l2_subdev_call(&wfd_dev->enc_sdev, core, ioctl,
 			ENCODE_STOP, (void *)inst->venc_inst);
@@ -1027,10 +1042,9 @@ static int wfdioc_dqbuf(struct file *filp, void *fh,
 
 	WFD_MSG_DBG("Waiting to dequeue buffer\n");
 
-	/* XXX: If we switch to non-blocking mode in the future,
-	 * we'll need to lock this with vb2_lock */
-	rc = vb2_dqbuf(&inst->vid_bufq, b, false /* blocking */);
-
+	mutex_lock(&inst->vb2_lock);
+	rc = vb2_dqbuf(&inst->vid_bufq, b, false);
+	mutex_unlock(&inst->vb2_lock);
 	if (rc)
 		WFD_MSG_ERR("Failed to dequeue buffer\n");
 	else

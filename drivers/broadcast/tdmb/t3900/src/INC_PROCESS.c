@@ -808,7 +808,6 @@ INC_UINT8 INC_CHANNEL_START(INC_UINT8 ucI2CID, ST_SUBCH_INFO* pChInfo)
 	INC_UINT16 wEnsemble;
 	INC_UINT32 ulRFFreq;
 	ST_BBPINFO* pInfo;
-	INC_UINT16 nLoop;
 	
 	INC_INTERRUPT_ENABLE(ucI2CID,INC_MPI_INTERRUPT_ENABLE);
 	INC_INTERRUPT_CLEAR(ucI2CID, INC_MPI_INTERRUPT_ENABLE);
@@ -839,24 +838,8 @@ INC_UINT8 INC_CHANNEL_START(INC_UINT8 ucI2CID, ST_SUBCH_INFO* pChInfo)
 		INC_MSG_PRINTF(0, " T3900 INC_SYNCDETECTOR GOOD \r\n");
 		if(INC_FICDECODER(ucI2CID, SIMPLE_FIC_ENABLE) != INC_SUCCESS)return INC_ERROR;
 		INC_MSG_PRINTF(0, " T3900 INC_FICDECODER GOOD \r\n");
-
-		if(INC_FIC_UPDATE(ucI2CID, pChInfo, SIMPLE_FIC_ENABLE) != INC_SUCCESS)
-		{
-			for(nLoop = 0; nLoop < 10; nLoop++)
-			{
-				if(INC_FICDECODER(ucI2CID, SIMPLE_FIC_ENABLE) != INC_SUCCESS) continue;
-				if(INC_FIC_UPDATE(ucI2CID, pChInfo, SIMPLE_FIC_ENABLE) == INC_SUCCESS) break;
-				else continue;
-			}
-
-			if(nLoop == 10)
-			{
-				printk("[INC] INC_FIC_UPDATE Return\n");
-				return INC_ERROR;
-			}
-		}
+		if(INC_FIC_UPDATE(ucI2CID, pChInfo, SIMPLE_FIC_ENABLE) != INC_SUCCESS) return INC_ERROR;
 		INC_MSG_PRINTF(0, " T3900 INC_FIC_UPDATE GOOD \r\n");
-
 		if(INC_START(ucI2CID, pChInfo, wEnsemble) != INC_SUCCESS) return INC_ERROR;
 		INC_MSG_PRINTF(0, " T3900 INC_START GOOD \r\n");
 	}
@@ -866,24 +849,8 @@ INC_UINT8 INC_CHANNEL_START(INC_UINT8 ucI2CID, ST_SUBCH_INFO* pChInfo)
 			return INC_ERROR;
 		}
 		INC_MSG_PRINTF(0, " T3900 INC_SYNCDETECTOR GOOD \r\n");
-		
-		if(INC_FIC_UPDATE(ucI2CID, pChInfo, SIMPLE_FIC_ENABLE) != INC_SUCCESS)
-		{
-			for(nLoop = 0; nLoop < 10; nLoop++)
-			{
-				if(INC_FICDECODER(ucI2CID, SIMPLE_FIC_ENABLE) != INC_SUCCESS) continue;
-				if(INC_FIC_UPDATE(ucI2CID, pChInfo, SIMPLE_FIC_ENABLE) == INC_SUCCESS) break;
-				else continue;
-			}
-
-			if(nLoop == 10)
-			{
-				printk("[INC] ENS INC_FIC_UPDATE Return\n");
-			  	return INC_ERROR;
-			}
-		}
+		if(INC_FIC_UPDATE(ucI2CID, pChInfo, SIMPLE_FIC_ENABLE) != INC_SUCCESS) return INC_ERROR;
 		INC_MSG_PRINTF(0, " T3900 INC_FIC_UPDATE GOOD \r\n");
-		
 		if(INC_START(ucI2CID, pChInfo, wEnsemble) != INC_SUCCESS) return INC_ERROR;
 		INC_MSG_PRINTF(0, " T3900 INC_START GOOD \r\n");
 	}
@@ -896,7 +863,7 @@ INC_UINT8 INC_CHANNEL_START(INC_UINT8 ucI2CID, ST_SUBCH_INFO* pChInfo)
 }
 
 
-/* LGE ADD for Test */
+/*                  */
 INC_UINT8 INC_RE_SYNCDETECTOR(INC_UINT8 ucI2CID, ST_SUBCH_INFO* pChInfo)
 {
 	INC_UINT16 wEnsemble;
@@ -1095,7 +1062,7 @@ INC_UINT8 INC_GET_ANT_LEVEL(INC_UINT8 ucI2CID)
 	INC_GET_CER(ucI2CID);
 	unCER = pInfo->uiCER;
 
-	//Delete reason : In ChannStart fail, ucTmid value may be invalid LGE
+	//                                                                   
 	//if(pInfo->ucTmid == TMID_0)    //if DAB
 	//unCER = pInfo->uiCER + ((pInfo->uiCER / 10.0) * 2.5);
 
@@ -1114,7 +1081,7 @@ INC_UINT8 INC_GET_ANT_LEVEL(INC_UINT8 ucI2CID)
 	printk("\n ucVber = %d, uiCER = %d ucAntLevel = %d, unRefAntLevel = %d\n", pInfo->ucVber, pInfo->uiCER, pInfo->ucAntLevel, unRefAntLevel);
 
 	/* Srart : Correct AntLevel DMB */
-	/* ucTmid block LGE */
+	/*                  */
 	if(/*(pInfo->ucTmid == TMID_1) &&*/(unRefAntLevel == 0) && (pInfo->uiCER < 1300) && (pInfo->ucVber >= 50))
 	 unRefAntLevel+=1;
 

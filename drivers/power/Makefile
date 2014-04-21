@@ -52,8 +52,6 @@ ifdef CONFIG_MACH_MSM8974_Z_KR
 obj-$(CONFIG_SMB349_CHARGER)   += smb349_charger_z_revA.o
 else ifdef CONFIG_MACH_MSM8974_Z_US
 obj-$(CONFIG_SMB349_CHARGER)   += smb349_charger_z_revA.o
-else ifdef CONFIG_MACH_MSM8974_Z_OPEN_COM
-obj-$(CONFIG_SMB349_CHARGER)   += smb349_charger_z_revA.o
 else ifdef CONFIG_MACH_MSM8974_Z_KDDI
 obj-$(CONFIG_SMB349_CHARGER)   += smb349_charger_z_revA.o
 else
@@ -80,12 +78,16 @@ obj-$(CONFIG_QPNP_CHARGER)	+= qpnp-charger.o
 else
 ifdef CONFIG_MACH_MSM8974_G2_KDDI
 obj-$(CONFIG_QPNP_CHARGER)	+= qpnp-charger.o
-qpnp-charger-y	+= qpnp-charger-kddi.o
+qpnp-charger-y  += qpnp-charger-kddi.o
 else
-ifdef CONFIG_MACH_MSM8974_Z_US
-obj-$(CONFIG_QPNP_CHARGER)	+= qpnp-charger_lge_z_us.o
+ifdef CONFIG_MACH_MSM8974_B1_KR
+obj-$(CONFIG_QPNP_CHARGER)	+= qpnp-charger_b1_kr.o
 else
-obj-$(CONFIG_QPNP_CHARGER)	+= qpnp-charger_lge_revA.o
+  ifdef CONFIG_MACH_MSM8974_B1W
+    obj-$(CONFIG_QPNP_CHARGER)      += qpnp-charger_b1_kr.o
+  else
+    obj-$(CONFIG_QPNP_CHARGER)	+= qpnp-charger_lge_revA.o
+  endif
 endif
 endif
 endif

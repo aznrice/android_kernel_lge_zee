@@ -31,17 +31,12 @@ extern void zw_power_pm_clean(void);
 extern void zw_led_turn_off(void);
 extern void zw_rtc_set(void);
 extern void zw_rtc_clean(void);
-extern ssize_t get_zw_timeout(char *buf);
-extern ssize_t set_zw_timeout(const char *buf, size_t count);
-extern ssize_t get_zw_delta(char *buf);
-extern ssize_t set_zw_delta(const char *buf, size_t count);
+extern unsigned long get_zw_timeout_delay(void);
+extern void set_zw_timeout_delay(unsigned long sec);
 extern int get_zw_rtc_retry(void);
 extern void set_zw_rtc_retry(int max);
 extern int get_zw_rtc_retry_delay(void);
 extern void set_zw_rtc_retry_delay(int msec);
-extern void zw_irqs_set(void);
-extern void zw_irqs_clean(void);
-extern int zw_psy_get_batt_capacity(void);
 
 struct zw_debug_ops {
 	int (*show)(char *, size_t);

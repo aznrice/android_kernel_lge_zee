@@ -24,6 +24,13 @@
 #define DEFAULT_MODE ((enum vsg_modes)VSG_MODE_CFR)
 #define MAX_BUFS_BUSY_WITH_ENC 5
 
+/*
+static void vsg_reset_timer(struct hrtimer *timer, ktime_t time)
+{
+	hrtimer_forward_now(timer, time);
+	hrtimer_restart(timer);
+}
+*/
 static int vsg_release_input_buffer(struct vsg_context *context,
 		struct vsg_buf_info *buf)
 {
@@ -114,6 +121,7 @@ static void vsg_work_func(struct work_struct *task)
 	INIT_LIST_HEAD(&buf_info->node);
 
 	ktime_get_ts(&buf_info->time);
+	//vsg_reset_timer(&context->threshold_timer, ns_to_ktime(
 	hrtimer_forward_now(&context->threshold_timer, ns_to_ktime(
 				context->max_frame_interval));
 
@@ -438,6 +446,7 @@ static long vsg_queue_buffer(struct v4l2_subdev *sd, void *arg)
 			 * otherwise, diff between two consecutive frames might
 			 * be less than max_frame_interval (for just one sample)
 			 */
+			//vsg_reset_timer(&context->threshold_timer,
 			hrtimer_forward_now(&context->threshold_timer,
 				ns_to_ktime(context->max_frame_interval));
 		}

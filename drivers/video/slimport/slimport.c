@@ -27,16 +27,15 @@
 #include <linux/err.h>
 #include <linux/async.h>
 #include <linux/slimport.h>
-#include <linux/zwait.h>
 
+#include "slimport_tx_reg.h"
 #include "slimport_tx_drv.h"
-#include "slimport_register_set_test.h"
 #ifdef CONFIG_SLIMPORT_DYNAMIC_HPD
 #include "../msm/mdss/mdss_hdmi_slimport.h"
 #endif
-/* LGE NOTICE,
- * Use device tree structure data when defined "CONFIG_OF"
- * 2012-10-17, jihyun.seong@lge.com
+/*            
+                                                          
+                                   
  */
 #include <linux/of_gpio.h>
 #include <linux/of_platform.h>
@@ -49,17 +48,17 @@ static int hdcp_enable = 1;
 
 /* HDCP switch for external block*/
 /* external_block_en = 1: enable, 0: disable*/
-int external_block_en = 0;
+int external_block_en;
 
 
 /* to access global platform data */
 static struct anx7808_platform_data *g_pdata;
 
-/* LGE_CHANGE,
- * to apply High voltage to HDMI_SWITCH_EN
- * which can select MHL or SlimPort on LGPS11
- * this feature should be enable only when board has hdmi switch chip.
- * 2012-10-31, jihyun.seong@lge.com
+/*            
+                                          
+                                             
+                                                                      
+                                   
  */
 /* #define USE_HDMI_SWITCH */
 
@@ -84,9 +83,9 @@ struct anx7808_data {
 
 static unsigned int cable_smem_size;
 
-struct msm_hdmi_slimport_ops *hdmi_slimport_ops = NULL;
-
 #ifdef CONFIG_SLIMPORT_DYNAMIC_HPD
+struct msm_hdmi_slimport_ops *hdmi_slimport_ops;
+
 void slimport_set_hdmi_hpd(int on)
 {
 	int rc = 0;
@@ -97,7 +96,7 @@ void slimport_set_hdmi_hpd(int on)
 		rc = hdmi_slimport_ops->set_upstream_hpd(g_pdata->hdmi_pdev, 1);
 		pr_info("%s %s: hpd on = %s\n", LOG_TAG, __func__,
 				rc ? "failed" : "passed");
-	}else{
+	} else {
 		rc = hdmi_slimport_ops->set_upstream_hpd(g_pdata->hdmi_pdev, 0);
 		pr_info("%s %s: hpd off = %s\n", LOG_TAG, __func__,
 				rc ? "failed" : "passed");
@@ -125,7 +124,7 @@ bool slimport_is_connected(void)
 	if (!pdata)
 		return false;
 
-	//spin_lock(&pdata->lock);
+	/* spin_lock(&pdata->lock); */
 
 	if (gpio_get_value_cansleep(pdata->gpio_cbl_det)) {
 		mdelay(10);
@@ -135,15 +134,15 @@ bool slimport_is_connected(void)
 			result = true;
 		}
 	}
-	//spin_unlock(&pdata->lock);
+	/* spin_unlock(&pdata->lock); */
 
 	return result;
 }
 EXPORT_SYMBOL(slimport_is_connected);
 
-/* LGE_CHANGE,
- * power control
- * 2012-10-17, jihyun.seong@lge.com
+/*            
+                
+                                   
  */
 static int slimport_avdd_power(unsigned int onoff)
 {
@@ -228,7 +227,7 @@ static ssize_t sp_hdcp_feature_store(struct device *dev, struct device_attribute
 	if (ret)
 		return ret;
 	hdcp_enable = val;
-	pr_info(" hdcp_enable = %d\n",hdcp_enable);
+	pr_info(" hdcp_enable = %d\n", hdcp_enable);
 	return count;
 }
 
@@ -266,53 +265,54 @@ static ssize_t anx7730_write_reg_store(struct device *dev, struct device_attribu
 	unchar tmp;
 	int id, reg, val = 0 ;
 
-	if (sp_tx_system_state != STATE_PLAY_BACK){
+	if (sp_tx_system_state != STATE_PLAY_BACK) {
 		pr_err("%s: error!, Not STATE_PLAY_BACK\n", LOG_TAG);
 		return -EINVAL;
 	}
 
-	if(sp_tx_rx_type != RX_HDMI){
+	if (sp_tx_rx_type != RX_HDMI) {
 		pr_err("%s: error!, rx is not anx7730\n", LOG_TAG);
 		return -EINVAL;
 	}
 
-	if(count != 7 && count != 5){
+	if (count != 7 && count != 5) {
 		pr_err("%s: cnt:%d, invalid input!\n", LOG_TAG, count-1);
 		pr_err("%s: ex) 05df   -> op:0(read)  id:5 reg:0xdf \n", LOG_TAG);
 		pr_err("%s: ex) 15df5f -> op:1(wirte) id:5 reg:0xdf val:0x5f\n", LOG_TAG);
 		return -EINVAL;
 	}
 
-	ret = snprintf(&op,2,buf);
-	ret = snprintf(&i,2,buf+1);
-	ret = snprintf(r,3,buf+2);
+	ret = snprintf(&op, 2, buf);
+	ret = snprintf(&i, 2, buf+1);
+	ret = snprintf(r, 3, buf+2);
 
-	id = simple_strtoul(&i,NULL,10);
-	reg = simple_strtoul(r,NULL,16);
+	id = simple_strtoul(&i, NULL, 10);
+	reg = simple_strtoul(r, NULL, 16);
 
-	if ((id != 0 && id != 1 && id != 5 && id != 6 && id != 7 )){
+	if ((id != 0 && id != 1 && id != 5 && id != 6 && id != 7)) {
 		pr_err("%s: invalid addr id! (id:0,1,5,6,7)\n", LOG_TAG);
 		return -EINVAL;
 	}
 
-	switch(op){
-		case 0x30: /* "0" -> read */
-			i2c_master_read_reg(id,reg,&tmp);
-			pr_info("%s: anx7730 read(%d,0x%x)= 0x%x \n",LOG_TAG,id,reg,tmp);
-			break;
+	switch (op) {
 
-		case 0x31: /* "1" -> write */
-			ret = snprintf(v,3,buf+4);
-			val = simple_strtoul(v,NULL,16);
+	case 0x30: /* "0" -> read */
+		i2c_master_read_reg(id, reg, &tmp);
+		pr_info("%s: anx7730 read(%d,0x%x)= 0x%x \n", LOG_TAG, id, reg, tmp);
+		break;
 
-			i2c_master_write_reg(id,reg,val);
-			i2c_master_read_reg(id,reg,&tmp);
-			pr_info("%s: anx7730 write(%d,0x%x,0x%x)\n",LOG_TAG,id,reg,tmp);
-			break;
+	case 0x31: /* "1" -> write */
+		ret = snprintf(v, 3, buf+4);
+		val = simple_strtoul(v, NULL, 16);
 
-		default:
-			pr_err("%s: invalid operation code! (0:read, 1:write)\n", LOG_TAG);
-			return -EINVAL;
+		i2c_master_write_reg(id, reg, val);
+		i2c_master_read_reg(id, reg, &tmp);
+		pr_info("%s: anx7730 write(%d,0x%x,0x%x)\n", LOG_TAG, id, reg, tmp);
+		break;
+
+	default:
+		pr_err("%s: invalid operation code! (0:read, 1:write)\n", LOG_TAG);
+		return -EINVAL;
 	}
 
 	return count;
@@ -323,20 +323,27 @@ anx7808 addr id:: HDMI_rx(0x7e:0, 0x80:1) DP_tx(0x72:5, 0x7a:6, 0x78:7)
 ex:read ) 05df   = read:0  id:5 reg:0xdf
 ex:write) 15df5f = write:1 id:5 reg:0xdf val:0x5f
 */
-static int anx7808_id_change(int id){
+static int anx7808_id_change(int id)
+{
 	int chg_id = 0;
 
-	switch(id){
-		case 0: chg_id = 0x7e; //RX_P0
-			break;
-		case 1: chg_id = 0x80; //RX_P1
-			break;
-		case 5: chg_id = 0x72; //TX_P2
-			break;
-		case 6: chg_id = 0x7a; //TX_P1
-			break;
-		case 7: chg_id = 0x78; //TX_P0
-			break;
+	switch (id) {
+
+	case 0:
+		chg_id = 0x7e; /* RX_P0 */
+		break;
+	case 1:
+		chg_id = 0x80; /* RX_P1 */
+		break;
+	case 5:
+		chg_id = 0x72; /* TX_P2 */
+		break;
+	case 6:
+		chg_id = 0x7a; /* TX_P1 */
+		break;
+	case 7:
+		chg_id = 0x78; /* TX_P0 */
+		break;
 	}
 	return chg_id;
 }
@@ -351,57 +358,297 @@ static ssize_t anx7808_write_reg_store(struct device *dev, struct device_attribu
 	unchar tmp;
 	int id, reg, val = 0 ;
 
-	if (sp_tx_system_state != STATE_PLAY_BACK){
+	if (sp_tx_system_state != STATE_PLAY_BACK) {
 		pr_err("%s: error!, Not STATE_PLAY_BACK\n", LOG_TAG);
 		return -EINVAL;
 	}
 
-	if(count != 7 && count != 5){
+	if (count != 7 && count != 5) {
 		pr_err("%s: cnt:%d, invalid input!\n", LOG_TAG, count-1);
 		pr_err("%s: ex) 05df   -> op:0(read)  id:5 reg:0xdf \n", LOG_TAG);
 		pr_err("%s: ex) 15df5f -> op:1(wirte) id:5 reg:0xdf val:0x5f\n", LOG_TAG);
 		return -EINVAL;
 	}
 
-	ret = snprintf(&op,2,buf);
-	ret = snprintf(&i,2,buf+1);
-	ret = snprintf(r,3,buf+2);
+	ret = snprintf(&op, 2, buf);
+	ret = snprintf(&i, 2, buf+1);
+	ret = snprintf(r, 3, buf+2);
 
-	id = simple_strtoul(&i,NULL,10);
-	reg = simple_strtoul(r,NULL,16);
+	id = simple_strtoul(&i, NULL, 10);
+	reg = simple_strtoul(r, NULL, 16);
 
-	if ((id != 0 && id != 1 && id != 5 && id != 6 && id != 7 )){
+	if ((id != 0 && id != 1 && id != 5 && id != 6 && id != 7)) {
 		pr_err("%s: invalid addr id! (id:0,1,5,6,7)\n", LOG_TAG);
 		return -EINVAL;
 	}
 
-	id = anx7808_id_change(id); //ex) 5 -> 0x72
+	id = anx7808_id_change(id); /* ex) 5 -> 0x72 */
 
-	switch(op){
-		case 0x30: /* "0" -> read */
-			sp_read_reg(id, reg, &tmp);
-			pr_info("%s: anx7808 read(0x%x,0x%x)= 0x%x \n",LOG_TAG,id,reg,tmp);
-			break;
+	switch (op) {
 
-		case 0x31: /* "1" -> write */
-			ret = snprintf(v,3,buf+4);
-			val = simple_strtoul(v,NULL,16);
+	case 0x30: /* "0" -> read */
+		sp_read_reg(id, reg, &tmp);
+		pr_info("%s: anx7808 read(0x%x,0x%x)= 0x%x \n", LOG_TAG, id, reg, tmp);
+		break;
 
-			sp_write_reg(id, reg, val);
-			sp_read_reg(id, reg, &tmp);
-			pr_info("%s: anx7808 write(0x%x,0x%x,0x%x)\n",LOG_TAG,id,reg,tmp);
-			break;
+	case 0x31: /* "1" -> write */
+		ret = snprintf(v, 3, buf+4);
+		val = simple_strtoul(v, NULL, 16);
 
-		default:
-			pr_err("%s: invalid operation code! (0:read, 1:write)\n", LOG_TAG);
-			return -EINVAL;
+		sp_write_reg(id, reg, val);
+		sp_read_reg(id, reg, &tmp);
+		pr_info("%s: anx7808 write(0x%x,0x%x,0x%x)\n", LOG_TAG, id, reg, tmp);
+		break;
+
+	default:
+		pr_err("%s: invalid operation code! (0:read, 1:write)\n", LOG_TAG);
+		return -EINVAL;
 	}
 
 	return count;
 }
 
+#ifdef SP_REGISTER_SET_TEST /* Slimport test */
+/*sysfs read interface*/
+static ssize_t ctrl_reg0_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG0);
+}
 
+/*sysfs write interface*/
+static ssize_t ctrl_reg0_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG0 = val;
+	return count;
+}
 
+/*sysfs read interface*/
+static ssize_t ctrl_reg10_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG10);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg10_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG10 = val;
+	return count;
+}
+
+/*sysfs read interface*/
+static ssize_t ctrl_reg11_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG11);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg11_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG11 = val;
+	return count;
+}
+
+/*sysfs read interface*/
+static ssize_t ctrl_reg2_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG2);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg2_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG2 = val;
+	return count;
+}
+
+/*sysfs read interface*/
+static ssize_t ctrl_reg12_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG12);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg12_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG12 = val;
+	return count;
+}
+
+/*sysfs read interface*/
+static ssize_t ctrl_reg1_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG1);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg1_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG1 = val;
+	return count;
+}
+
+/*sysfs read interface*/
+static ssize_t ctrl_reg6_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG6);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg6_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG6 = val;
+	return count;
+}
+
+/*sysfs read interface*/
+static ssize_t ctrl_reg16_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG16);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg16_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG16 = val;
+	return count;
+}
+
+/*sysfs read interface*/
+static ssize_t ctrl_reg5_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG5);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg5_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG5 = val;
+	return count;
+}
+
+/*sysfs read interface*/
+static ssize_t ctrl_reg8_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG8);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg8_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG8 = val;
+	return count;
+}
+
+/*sysfs read interface*/
+static ssize_t ctrl_reg15_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG15);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg15_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG15 = val;
+	return count;
+}
+
+/*sysfs read interface*/
+static ssize_t ctrl_reg18_show(struct device *dev, struct device_attribute *attr,
+		 char *buf)
+{
+	return sprintf(buf, "0x%x\n", val_SP_TX_LT_CTRL_REG18);
+}
+
+/*sysfs write interface*/
+static ssize_t ctrl_reg18_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	int ret;
+	long val;
+	ret = strict_strtol(buf, 10, &val);
+	if (ret)
+		return ret;
+	val_SP_TX_LT_CTRL_REG18 = val;
+	return count;
+}
+#endif
 /* for debugging */
 static struct device_attribute slimport_device_attrs[] = {
 	__ATTR(rev_check, S_IRUGO | S_IWUSR, NULL, slimport_rev_check_store),
@@ -409,24 +656,19 @@ static struct device_attribute slimport_device_attrs[] = {
 	__ATTR(hdcp_switch, S_IRUGO | S_IWUSR, sp_external_block_show, sp_external_block_store),
 	__ATTR(anx7730, S_IRUGO | S_IWUSR, NULL, anx7730_write_reg_store),
 	__ATTR(anx7808, S_IRUGO | S_IWUSR, NULL, anx7808_write_reg_store),
-#ifdef CONFIG_SLIMPORT_REGISTER_SET_TEST /*slimport test*/
+#ifdef SP_REGISTER_SET_TEST /* slimport test */
 	__ATTR(ctrl_reg0, S_IRUGO | S_IWUSR, ctrl_reg0_show, ctrl_reg0_store),
-	__ATTR(ctrl_reg4, S_IRUGO | S_IWUSR, ctrl_reg4_show, ctrl_reg4_store),
-	__ATTR(ctrl_reg7, S_IRUGO | S_IWUSR, ctrl_reg7_show, ctrl_reg7_store),
-	__ATTR(ctrl_reg9, S_IRUGO | S_IWUSR, ctrl_reg9_show, ctrl_reg9_store),
-	__ATTR(ctrl_reg14, S_IRUGO | S_IWUSR, ctrl_reg14_show, ctrl_reg14_store),
-	__ATTR(ctrl_reg17, S_IRUGO | S_IWUSR, ctrl_reg17_show, ctrl_reg17_store),
-	__ATTR(ctrl_reg19, S_IRUGO | S_IWUSR, ctrl_reg19_show, ctrl_reg19_store),
+	__ATTR(ctrl_reg10, S_IRUGO | S_IWUSR, ctrl_reg10_show, ctrl_reg10_store),
+	__ATTR(ctrl_reg11, S_IRUGO | S_IWUSR, ctrl_reg11_show, ctrl_reg11_store),
+	__ATTR(ctrl_reg2, S_IRUGO | S_IWUSR, ctrl_reg2_show, ctrl_reg2_store),
+	__ATTR(ctrl_reg12, S_IRUGO | S_IWUSR, ctrl_reg12_show, ctrl_reg12_store),
 	__ATTR(ctrl_reg1, S_IRUGO | S_IWUSR, ctrl_reg1_show, ctrl_reg1_store),
+	__ATTR(ctrl_reg6, S_IRUGO | S_IWUSR, ctrl_reg6_show, ctrl_reg6_store),
+	__ATTR(ctrl_reg16, S_IRUGO | S_IWUSR, ctrl_reg16_show, ctrl_reg16_store),
 	__ATTR(ctrl_reg5, S_IRUGO | S_IWUSR, ctrl_reg5_show, ctrl_reg5_store),
 	__ATTR(ctrl_reg8, S_IRUGO | S_IWUSR, ctrl_reg8_show, ctrl_reg8_store),
 	__ATTR(ctrl_reg15, S_IRUGO | S_IWUSR, ctrl_reg15_show, ctrl_reg15_store),
 	__ATTR(ctrl_reg18, S_IRUGO | S_IWUSR, ctrl_reg18_show, ctrl_reg18_store),
-	__ATTR(ctrl_reg2, S_IRUGO | S_IWUSR, ctrl_reg2_show, ctrl_reg2_store),
-	__ATTR(ctrl_reg12, S_IRUGO | S_IWUSR, ctrl_reg12_show, ctrl_reg12_store),
-	__ATTR(ctrl_reg6, S_IRUGO | S_IWUSR, ctrl_reg6_show, ctrl_reg6_store),
-	__ATTR(ctrl_reg16, S_IRUGO | S_IWUSR, ctrl_reg16_show, ctrl_reg16_store),
-	__ATTR(ctrl_reg3, S_IRUGO | S_IWUSR, ctrl_reg3_show, ctrl_reg3_store),
 #endif
 };
 
@@ -644,7 +886,7 @@ static void slimport_playback_proc(void)
 	else
 		sp_tx_video_mute(0);
 }
-/* // blcok this due to dongle issue 
+/* // blcok this due to dongle issue
 static void slimport_cable_monitor(struct anx7808_data *anx7808)
 {
 	if ((gpio_get_value_cansleep(anx7808->pdata->gpio_cbl_det))
@@ -859,14 +1101,21 @@ static int anx7808_system_init(void)
 }
 
 extern void dwc3_ref_clk_set(bool);
+
 static void dwc3_ref_clk_work_func(struct work_struct *work)
 {
 	struct anx7808_data *td = container_of(work, struct anx7808_data,
 						dwc3_ref_clk_work.work);
-	if(td->slimport_connected)
+	bool is_connected = slimport_is_connected();
+
+	if (!td->slimport_connected && is_connected) {
+		td->slimport_connected = true;
 		dwc3_ref_clk_set(true);
-	else
+	} else if (td->slimport_connected && !is_connected) {
+		td->slimport_connected = false;
 		dwc3_ref_clk_set(false);
+	} else
+		pr_info("%s %s : ignore incorrect irq\n", LOG_TAG, __func__);
 }
 static irqreturn_t anx7808_cbl_det_isr(int irq, void *data)
 {
@@ -875,21 +1124,16 @@ static irqreturn_t anx7808_cbl_det_isr(int irq, void *data)
 	if (gpio_get_value(anx7808->pdata->gpio_cbl_det)) {
 		wake_lock(&anx7808->slimport_lock);
 		pr_info("%s %s : detect cable insertion\n", LOG_TAG, __func__);
-		if (!anx7808->slimport_connected) {
-			anx7808->slimport_connected = true;
-			queue_delayed_work(anx7808->workqueue, &anx7808->dwc3_ref_clk_work, 0);
-		}
 		queue_delayed_work(anx7808->workqueue, &anx7808->work, 0);
 	} else {
 		pr_info("%s %s : detect cable removal\n", LOG_TAG, __func__);
-		if (anx7808->slimport_connected) {
-			anx7808->slimport_connected = false;
-			queue_delayed_work(anx7808->workqueue, &anx7808->dwc3_ref_clk_work, 0);
-		}
 		cancel_delayed_work_sync(&anx7808->work);
 		wake_unlock(&anx7808->slimport_lock);
 		wake_lock_timeout(&anx7808->slimport_lock, 2*HZ);
 	}
+	queue_delayed_work(anx7808->workqueue, &anx7808->dwc3_ref_clk_work,
+					msecs_to_jiffies(10));
+
 	return IRQ_HANDLED;
 }
 
@@ -905,9 +1149,9 @@ static void anx7808_work_func(struct work_struct *work)
 #endif
 }
 
-/* LGE_CHANGE,
- * add device tree parsing functions
- * 2012-10-17, jihyun.seong@lge.com
+/*            
+                                    
+                                   
  */
 #ifdef CONFIG_OF
 int anx7808_regulator_configure(
@@ -1071,43 +1315,6 @@ int anx7808_get_sbl_cable_type(void)
 	return cable_type;
 }
 
-#ifdef CONFIG_ZERO_WAIT
-static int zw_slimport_notifier_call(struct notifier_block *nb,
-			unsigned long state, void *ptr)
-{
-	struct anx7808_data *anx7808 = (struct anx7808_data *)nb->ptr;
-
-	switch (state) {
-	case ZW_STATE_OFF:
-		if (gpio_get_value(anx7808->pdata->gpio_cbl_det)) {
-			wake_lock(&anx7808->slimport_lock);
-			anx7808->slimport_connected = true;
-			dwc3_ref_clk_set(true);
-			queue_delayed_work(anx7808->workqueue,
-						&anx7808->work, 0);
-		}
-		break;
-
-	case ZW_STATE_ON_SYSTEM:
-	case ZW_STATE_ON_USER:
-		if (anx7808->slimport_connected) {
-			/* we must go to suspend in the ZeroWait mdoe*/
-			dwc3_ref_clk_set(false);
-			cancel_delayed_work_sync(&anx7808->work);
-			anx7808->slimport_connected = false;
-			wake_unlock(&anx7808->slimport_lock);
-		}
-		break;
-	}
-
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block zw_slimport_nb = {
-	.notifier_call = zw_slimport_notifier_call,
-};
-#endif /* CONFIG_ZERO_WAIT */
-
 static int anx7808_i2c_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -1117,8 +1324,19 @@ static int anx7808_i2c_probe(struct i2c_client *client,
 	int ret = 0;
 	int sbl_cable_type = 0;
 
-#ifdef CONFIG_SLIMPORT_REGISTER_SET_TEST
-	anx7808_i2c_probe_reg_init();
+#ifdef SP_REGISTER_SET_TEST
+	val_SP_TX_LT_CTRL_REG0 = 0x19;
+	val_SP_TX_LT_CTRL_REG10 = 0x00;
+	val_SP_TX_LT_CTRL_REG11 = 0x00;
+	val_SP_TX_LT_CTRL_REG2 = 0x36;
+	val_SP_TX_LT_CTRL_REG12 = 0x00;
+	val_SP_TX_LT_CTRL_REG1 = 0x26;
+	val_SP_TX_LT_CTRL_REG6 = 0x3c;
+	val_SP_TX_LT_CTRL_REG16 = 0x18;
+	val_SP_TX_LT_CTRL_REG5 = 0x28;
+	val_SP_TX_LT_CTRL_REG8 = 0x2F;
+	val_SP_TX_LT_CTRL_REG15 = 0x10;
+	val_SP_TX_LT_CTRL_REG18 = 0x1F;
 #endif
 	if (!i2c_check_functionality(client->adapter,
 		I2C_FUNC_SMBUS_I2C_BLOCK)) {
@@ -1203,7 +1421,7 @@ static int anx7808_i2c_probe(struct i2c_client *client,
 	sbl_cable_type = anx7808_get_sbl_cable_type();
 
 	if ((lge_get_laf_mode() != LGE_LAF_MODE_LAF) &&
-		( sbl_cable_type != CBL_910K)){
+		(sbl_cable_type != CBL_910K)) {
 
 		ret = request_threaded_irq(client->irq, NULL, anx7808_cbl_det_isr,
 						IRQF_TRIGGER_RISING
@@ -1228,7 +1446,7 @@ static int anx7808_i2c_probe(struct i2c_client *client,
 			pr_err("interrupt wake enable fail\n");
 			goto err3;
 		}
-	}else {
+	} else {
 		pr_err("%s %s : %s, Disable cbl det irq!!\n", LOG_TAG, __func__,
 			sbl_cable_type == CBL_910K ? "910K Cable Connected" : "Laf Mode");
 	}
@@ -1259,11 +1477,6 @@ static int anx7808_i2c_probe(struct i2c_client *client,
 	}
 #endif
 
-#ifdef CONFIG_ZERO_WAIT
-	zw_irqs_info_register(client->irq, 1);
-	zw_notifier_chain_register(&zw_slimport_nb, anx7808);
-#endif
-
 	goto exit;
 
 err3:
@@ -1283,12 +1496,6 @@ static int anx7808_i2c_remove(struct i2c_client *client)
 {
 	struct anx7808_data *anx7808 = i2c_get_clientdata(client);
 	int i = 0;
-
-#ifdef CONFIG_ZERO_WAIT
-	zw_irqs_info_unregister(client->irq);
-	zw_notifier_chain_unregister(&zw_slimport_nb);
-#endif
-
 	for (i = 0; i < ARRAY_SIZE(slimport_device_attrs); i++)
 		device_remove_file(&client->dev, &slimport_device_attrs[i]);
 	free_irq(client->irq, anx7808);

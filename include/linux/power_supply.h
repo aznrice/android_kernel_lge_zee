@@ -51,10 +51,12 @@ enum {
 	POWER_SUPPLY_HEALTH_UNKNOWN = 0,
 	POWER_SUPPLY_HEALTH_GOOD,
 	POWER_SUPPLY_HEALTH_OVERHEAT,
+	POWER_SUPPLY_HEALTH_WARM,
 	POWER_SUPPLY_HEALTH_DEAD,
 	POWER_SUPPLY_HEALTH_OVERVOLTAGE,
 	POWER_SUPPLY_HEALTH_UNSPEC_FAILURE,
 	POWER_SUPPLY_HEALTH_COLD,
+	POWER_SUPPLY_HEALTH_COOL,
 };
 
 enum {
@@ -99,8 +101,11 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_VOLTAGE_AVG,
 	POWER_SUPPLY_PROP_INPUT_VOLTAGE_REGULATION,
+	POWER_SUPPLY_PROP_VOLTAGE_OCV,
 	POWER_SUPPLY_PROP_CURRENT_MAX,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_MAX,
+	POWER_SUPPLY_PROP_INPUT_CURRENT_TRIM,
+	POWER_SUPPLY_PROP_INPUT_CURRENT_SETTLED,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CURRENT_AVG,
 	POWER_SUPPLY_PROP_POWER_NOW,
@@ -122,6 +127,8 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_CAPACITY, /* in percents! */
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_TEMP,
+	POWER_SUPPLY_PROP_COOL_TEMP,
+	POWER_SUPPLY_PROP_WARM_TEMP,
 	POWER_SUPPLY_PROP_TEMP_AMBIENT,
 	POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW,
 	POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG,
@@ -140,23 +147,26 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_BAT_REMOVED,
 #endif
 #if defined(CONFIG_LGE_CURRENTNOW)
-	/* kwangdo.yi@lge.com [jointlab] Wed 27 Mar 2013 S
-	   added for current now virtual driver
+	/*                                                
+                                        
 */
 	POWER_SUPPLY_PROP_VIRT_CURRENT_NOW,
 	POWER_SUPPLY_PROP_VIRT_ENABLE_BMS,
-	/* kwangdo.yi@lge.com [jointlab] Wed 27 Mar 2013 E */
+	/*                                                 */
 #endif
 #ifdef CONFIG_FTT_CHARGER_V3
 	POWER_SUPPLY_PROP_FTT_ANNTENA_LEVEL,
 #endif
 #ifdef CONFIG_MAX17050_FUELGAUGE
-/*junnyoung.jang@lge.com 20130326 Add battery condition */
+/*                                                      */
 	POWER_SUPPLY_PROP_BATTERY_CONDITION,
 	POWER_SUPPLY_PROP_BATTERY_AGE,
 #endif
 #ifdef CONFIG_SMB349_VZW_FAST_CHG
 	POWER_SUPPLY_PROP_VZW_CHG_STATE,
+#endif
+#if defined(CONFIG_MACH_MSM8974_VU3_KR) && defined(CONFIG_WIRELESS_CHARGER)
+	POWER_SUPPLY_PROP_WLC_CHARGING_BAR,
 #endif
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_PROP_MODEL_NAME,
@@ -254,6 +264,7 @@ extern int power_supply_am_i_supplied(struct power_supply *psy);
 extern int power_supply_set_battery_charged(struct power_supply *psy);
 extern int power_supply_set_current_limit(struct power_supply *psy, int limit);
 extern int power_supply_set_online(struct power_supply *psy, bool enable);
+extern int power_supply_set_health_state(struct power_supply *psy, int health);
 extern int power_supply_set_present(struct power_supply *psy, bool enable);
 extern int power_supply_set_scope(struct power_supply *psy, int scope);
 extern int power_supply_set_charge_type(struct power_supply *psy, int type);
@@ -283,6 +294,9 @@ static inline int power_supply_set_current_limit(struct power_supply *psy,
 							{ return -ENOSYS; }
 static inline int power_supply_set_online(struct power_supply *psy,
 							bool enable)
+							{ return -ENOSYS; }
+static inline int power_supply_set_health_state(struct power_supply *psy,
+							int health)
 							{ return -ENOSYS; }
 static inline int power_supply_set_present(struct power_supply *psy,
 							bool enable)
@@ -353,6 +367,7 @@ static inline bool power_supply_is_watt_property(enum power_supply_property psp)
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 	case POWER_SUPPLY_PROP_VOLTAGE_AVG:
+	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
 	case POWER_SUPPLY_PROP_POWER_NOW:
 		return 1;
 	default:

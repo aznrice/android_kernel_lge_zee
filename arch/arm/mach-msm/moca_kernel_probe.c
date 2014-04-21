@@ -20,20 +20,15 @@
 
 #define MODULE_NAME "moca_kernel_probe"
 
-
-
-
 #define EVENT_NUM		20		//The number of event time for comparison
 #define EVENT_PERIOD	60		//Maximum period to trigger MOCA, which is by secs
 
 #define TIME_ARRAY_MAX	(unsigned int)(EVENT_NUM * 3 / 2)		//Event time log array index 
 
-
 #define KERNEL_EVENT_NOTI_LEN 		81U
 #define KERNEL_IOCTL_MAGIC			'K'
 #define KERNEL_IOCTL_MAXNR			0x02
 #define KERNEL_EVENT_NOTI			_IOR(KERNEL_IOCTL_MAGIC, 0x01, unsigned int)
-
 
 long lge_moca_kernel_probe_ioctl(struct file *file, const unsigned int cmd, unsigned long arg);
 
@@ -47,8 +42,7 @@ struct completion km_ioctl_wait_completion;
 bool irq_debug = false;
 unsigned int event_count = 0;
 
-
-struct kernel_probe_context 
+struct kernel_probe_context
 {
 	dev_t 			dev_num;
 	struct device 	*dev;
@@ -62,35 +56,31 @@ const struct file_operations kernel_probe_fops = {
 	.unlocked_ioctl = lge_moca_kernel_probe_ioctl,
 };
 
-
 void lge_moca_kernel_monitor_init(void)
 {
-
 	printk("%s: Init for moca irq monitor\n",__func__);
 	// Init for global variables
 	memset(event_time, 0, sizeof(event_time));
 	top_index = 0;
 	event_count = 0;
 	event_type = NO_EVENT;
-
 }
 
 long lge_moca_kernel_probe_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	long ret = 0;
-	
+
 	if(_IOC_TYPE(cmd) != KERNEL_IOCTL_MAGIC) 
-	{ 
-		printk("magic err\n"); 
+	{
+		printk("magic err\n");
 		return -EINVAL;
-	} 
-	
-	if(_IOC_NR(cmd) >= KERNEL_IOCTL_MAXNR) 
+	}
+
+	if(_IOC_NR(cmd) >= KERNEL_IOCTL_MAXNR)
 	{
 		printk("NR err\n");
 		return -EINVAL;
 	}
-
 
 	switch(cmd)
 	{
@@ -106,37 +96,32 @@ long lge_moca_kernel_probe_ioctl(struct file *file, unsigned int cmd, unsigned l
 				irq_debug = false;
 
 				printk("[MOCA] %s: IRQ Event Triggered ", __func__);
-				
+
 				if(copy_to_user((void *)arg, &event_type, sizeof(event_type)))
 				{
 					ret = -EFAULT;
 				}
 
 				lge_moca_kernel_monitor_init();
-
-				
 			}
-			
+
 			init_completion(&km_ioctl_wait_completion);
-			
+
 			break;
-			
+
 		default:
 			break;
-				
 	}
 
 	return ret;
 }
-
-
 
 static unsigned long lge_moca_get_local_time_by_secs(void)
 {
 	struct timespec time;
 	struct tm tmresult;
 	static int tm_day = 0;
-	
+
 	time = __current_kernel_time();
 	time_to_tm(time.tv_sec,sys_tz.tz_minuteswest * 60* (-1),&tmresult);
 
@@ -147,23 +132,18 @@ static unsigned long lge_moca_get_local_time_by_secs(void)
 		lge_moca_kernel_monitor_init();
 	}
 
-	
 	return (tmresult.tm_sec + tmresult.tm_min * 60 + tmresult.tm_hour * 60 * 60);
 }
 
-
 int lge_moca_report_irq_time(void)
 {
-
 	//event_time[top_index] = jiffies_to_msecs(jiffies)/1000;
 
 	event_time[top_index] = lge_moca_get_local_time_by_secs();
 
-
-	printk("\n%s: current time = %06lu secs \n",__func__, event_time[top_index]);	
+	printk("\n%s: current time = %06lu secs \n",__func__, event_time[top_index]);
 
 	top_index = (top_index+1)%TIME_ARRAY_MAX;
-
 
 	if(event_count < TIME_ARRAY_MAX) // Wait until events to be fulled in buffer
 	{
@@ -173,9 +153,8 @@ int lge_moca_report_irq_time(void)
 	}
 	else
 	{
-
 		// Designate index to compare btw them.
-		
+
 		int curr_index = top_index - 1;
 
 		int prev_index = curr_index - EVENT_NUM;
@@ -184,13 +163,8 @@ int lge_moca_report_irq_time(void)
 
 		if(prev_index < 0 ) prev_index += TIME_ARRAY_MAX;
 
-		
-
-
 		// Now compare it!
 
-
-		
 		if(event_time[curr_index] - event_time[prev_index] > EVENT_PERIOD)
 		{
 			printk("%s: No violated IRQs \n",__func__);
@@ -200,7 +174,7 @@ int lge_moca_report_irq_time(void)
 		{
 			int i=0;
 			int print_index=0;
-		
+
 			printk("%s: Abnormal 57/58 irqs are detected, by comparing %06lu[%d] - %06lu[%d] > %d \n",__func__, event_time[curr_index],curr_index, event_time[prev_index], prev_index, EVENT_PERIOD);
 
 			for(i=0 ; i<TIME_ARRAY_MAX ; i++)
@@ -210,16 +184,10 @@ int lge_moca_report_irq_time(void)
 			}
 
 			printk("\n");
-			
-			
-			
+
 			return 1;
-
 		}
-
 	}
-
-	
 }
 
 void kernel_event_monitor(moca_km_enum_type type)
@@ -248,7 +216,7 @@ static int __init lge_moca_kernel_probe_init(void)
 		printk( " Context kzalloc err.\n");
 		return -ENOMEM;
 	}
-	
+
 	kernel_probe_class = class_create(THIS_MODULE, MODULE_NAME);
 
 	ret = alloc_chrdev_region(&gkernel_probe_context->dev_num, 0, 1, MODULE_NAME);
@@ -298,8 +266,6 @@ static void __exit lge_moca_kernel_probe_exit(void)
 
 	printk( "MOCA Kernel Probe Module exit OK!!.\n");
 }
-
-
 
 module_init(lge_moca_kernel_probe_init);
 module_exit(lge_moca_kernel_probe_exit);

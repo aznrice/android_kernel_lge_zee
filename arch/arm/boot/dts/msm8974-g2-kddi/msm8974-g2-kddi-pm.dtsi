@@ -149,6 +149,9 @@
 
 		};
 
+		pm8941_bms: qcom,bms  {
+			status = "ok";
+		};
 		vadc@3100 {
 			chan@14 {
 				status = "ok";

@@ -26,27 +26,66 @@ else
 DHDCFLAGS += -DSDIO_ISR_THREAD
 endif
 
-ifeq ($(CONFIG_WIFI_CONTROL_FUNC),y)
-DHDCFLAGS += -DCUSTOMER_HW2
-DHDCFLAGS += -DCONFIG_WIFI_CONTROL_FUNC
-endif
+# Wi-Fi Turning on Time
+DHDCFLAGS += -DWIFI_TURNON_DELAY=0
 
 DHDCFLAGS += -DCUSTOMER_HW4
+#For LGE changes
 DHDCFLAGS += -DCUSTOMER_HW10
+DHDCFLAGS += -DWL_CFG80211
 
-#DHDCFLAGS += -DBLOCK_IPV6_PACKET -DPASS_IPV4_SUSPEND
-#DHDCFLAGS += -DSUPPORT_DEEP_SLEEP
+DHDCFLAGS += -DDHD_DONOT_FORWARD_BCMEVENT_AS_NETWORK_PKT
+DHDCFLAGS += -DENABLE_ADAPTIVE_SCHED
+
+# Debug
 #DHDCFLAGS += -DSIMPLE_MAC_PRINT
-
-# For MMC DATA CRC Error Issue
-DHDCFLAGS += -DSDIO_CRC_ERROR_FIX
-
+DHDCFLAGS += -DDEBUGFS_CFG80211
 # Print out kernel panic point of file and line info when assertion happened
 DHDCFLAGS += -DBCMASSERT_LOG
 
+# Print 8021X
+DHDCFLAGS += -DDHD_8021X_DUMP
+
+# VSDB
+DHDCFLAGS += -DVSDB
+DHDCFLAGS += -DPROP_TXSTATUS
+
+# Wi-Fi Direct
+DHDCFLAGS += -DWL_CFG80211_VSDB_PRIORITIZE_SCAN_REQUEST
 # For p2p connection issue
-DHDCFLAGS += -DWL_CFG80211_GON_COLLISION
 DHDCFLAGS += -DWL_SCB_TIMEOUT=10
+# For TDLS tear down inactive time 10 sec
+DHDCFLAGS += -DCUSTOM_TDLS_IDLE_MODE_SETTING=10000
+# for TDLS RSSI HIGH for establishing TDLS link
+DHDCFLAGS += -DCUSTOM_TDLS_RSSI_THRESHOLD_HIGH=-80
+# for TDLS RSSI HIGH for tearing down TDLS link
+DHDCFLAGS += -DCUSTOM_TDLS_RSSI_THRESHOLD_LOW=-85
+
+# Roaming
+#DHDCFLAGS += -DROAM_AP_ENV_DETECTION
+DHDCFLAGS += -DROAM_ENABLE -DROAM_API
+#DHDCFLAGS += -DENABLE_FW_ROAM_SUSPEND
+
+# CCX
+ifeq ($(CONFIG_BRCM_CCX),y)
+  DHDCFLAGS += -DBCMCCX
+endif
+
+DHDCFLAGS += -DCUSTOM_DSCP_TO_PRIO_MAPPING
+
+# SoftAP
+DHDCFLAGS += -DWL_SUPPORT_AUTO_CHANNEL -DSUPPORT_HIDDEN_AP
+DHDCFLAGS += -DSUPPORT_SOFTAP_SINGL_DISASSOC
+DHDCFLAGS += -DDISABLE_11H_SOFTAP
+
+# HW4 specific features
+DHDCFLAGS += -DSUPPORT_PM2_ONLY
+#DHDCFLAGS += -DSUPPORT_DEEP_SLEEP
+DHDCFLAGS += -DSUPPORT_AMPDU_MPDU_CMD
+#DHDCFLAGS += -DBLOCK_IPV6_PACKET -DPASS_IPV4_SUSPEND
+
+# For special PNO Event keep wake lock for 10sec
+DHDCFLAGS += -DCUSTOM_PNO_EVENT_LOCK_xTIME=10
 
 # For Passing all multicast packets to host when not in suspend mode.
 DHDCFLAGS += -DPASS_ALL_MCAST_PKTS
@@ -54,14 +93,12 @@ DHDCFLAGS += -DPASS_ALL_MCAST_PKTS
 # Early suspend
 #DHDCFLAGS += -DDHD_USE_EARLYSUSPEND 
 
-DHDCFLAGS += -DSUPPORT_PM2_ONLY
+# WiFi turn off delay
+#DHDCFLAGS += -DWIFI_TURNOFF_DELAY=100
 
 # For Scan result patch
 DHDCFLAGS += -DESCAN_RESULT_PATCH
 DHDCFLAGS += -DDUAL_ESCAN_RESULT_BUFFER
-
-DHDCFLAGS += -DROAM_ENABLE -DROAM_CHANNEL_CACHE -DROAM_API
-#DHDCFLAGS += -DDISABLE_FW_ROAM_SUSPEND
 
 # For Static Buffer
 ifeq ($(CONFIG_BROADCOM_WIFI_RESERVED_MEM),y)
@@ -75,42 +112,36 @@ ifeq ($(CONFIG_BRCM_CCX),y)
   DHDCFLAGS += -DBCMCCX
 endif
 
-# For WAPI
-ifeq ($(CONFIG_BRCM_WAPI),y)
-  DHDCFLAGS += -DBCMWAPI_WPI -DBCMWAPI_WAI
-endif
-
-DHDCFLAGS += -DWL_CFG80211
-
-# SoftAP
-DHDCFLAGS += -DSUPPORT_AUTO_CHANNEL -DSUPPORT_HIDDEN_AP
-DHDCFLAGS += -DSUPPORT_SOFTAP_SINGL_DISASSOC 
-#DHDCFLAGS += -DUSE_STAMAC_4SOFTAP
-
-# DPC priority
-DHDCFLAGS += -DCUSTOM_DPC_PRIO_SETTING=98
-
-# WiFi turn off delay
-DHDCFLAGS += -DWIFI_TURNOFF_DELAY=100
-
 # DTIM listen interval in suspend mode(0 means follow AP's DTIM period)
 DHDCFLAGS += -DCUSTOM_SUSPEND_BCN_LI_DTIM=3
-
-# Priority mismatch fix with kernel stack
-DHDCFLAGS += -DPKTPRIO_OVERRIDE
-DHDCFLAGS += -DBG_PKTPRIO_OVERRIDE
 
 # Ioctl timeout 5000ms
 DHDCFLAGS += -DIOCTL_RESP_TIMEOUT=5000
 
-# WiFi Kernel thread type
-DHDCFLAGS += -DUSE_KTHREAD_API
+# DPC priority
+DHDCFLAGS += -DCUSTOM_DPC_PRIO_SETTING=98
+
+# Priority mismatch fix with kernel stack
+DHDCFLAGS += -DPKTPRIO_OVERRIDE
 
 # for only AP Certification
-#DHDCFLAGS += -DBCMWPA_MIXED
+#DHDCFLAGS += -DSUPPORT_SOFTAP_WPAWPA2_MIXED
+
+# Config PM Control
+DHDCFLAGS += -DCONFIG_PM_LOCK
+
+# idle count
+DHDCFLAGS += -DDHD_USE_IDLECOUNT
 
 # B/G/BGN mode support in HOSTAPD
 #DHDCFLAGS += -DSUPPORT_HOSTAPD_BGN_MODE
+
+# Used short dwell time during initial scan
+DHDCFLAGS += -DUSE_INITIAL_SHORT_DWELL_TIME
+
+ifeq ($(CONFIG_HAS_WAKELOCK),)
+DHDCFLAGS += -DCONFIG_HAS_WAKELOCK
+endif
 
 ############
 # JellyBean 
@@ -119,40 +150,176 @@ DHDCFLAGS += -DWL_ENABLE_P2P_IF
 #DHDCFLAGS += -DMULTIPLE_SUPPLICANT
 DHDCFLAGS += -DWL_CFG80211_STA_EVENT
 
+#################
+# JellyBean Plus
+#################
+DHDCFLAGS += -DWL_SUPPORT_BACKPORTED_KPATCHES
+
+
+#################
+# Kitkat
+#################
+DHDCFLAGS += -DWL_IFACE_COMB_NUM_CHANNELS
+
+##########################
+# driver type
+# m: module type driver
+# y: built-in type driver
+##########################
+DRIVER_TYPE = $(CONFIG_BCMDHD)
+
+#############################
+# Platform dependent feature
+#############################
+ifeq ($(DRIVER_TYPE),y)
+DHDCFLAGS += -DENABLE_INSMOD_NO_FW_LOAD
+endif
+
+ifeq ($(CONFIG_BCMDHD_COB),y)
+DHDCFLAGS += -DGET_CUSTOM_MAC_ENABLE
+endif
+
 #########################
 # Chip dependent feature
 #########################
 
+ifneq ($(CONFIG_BCM4339),)
+  DHDCFLAGS += -DBCM4339_CHIP
+  DHDCFLAGS += -DENABLE_BCN_LI_BCN_WAKEUP
+  DHDCFLAGS += -DSDIO_CRC_ERROR_FIX
+  DHDCFLAGS += -DROAM_CHANNEL_CACHE 
+# tput enhancement
+  DHDCFLAGS += -DCUSTOM_GLOM_SETTING=8 -DCUSTOM_RXCHAIN=1
+  DHDCFLAGS += -DUSE_DYNAMIC_F2_BLKSIZE -DDYNAMIC_F2_BLKSIZE_FOR_NONLEGACY=128
+  DHDCFLAGS += -DBCMSDIOH_TXGLOM -DCUSTOM_TXGLOM=1 -DBCMSDIOH_TXGLOM_HIGHSPEED
+  DHDCFLAGS += -DDHDTCPACK_SUPPRESS
+  DHDCFLAGS += -DUSE_WL_TXBF
+  DHDCFLAGS += -DUSE_WL_FRAMEBURST
+  DHDCFLAGS += -DRXFRAME_THREAD
+  DHDCFLAGS += -DCUSTOM_AMPDU_BA_WSIZE=64
+  DHDCFLAGS += -DCUSTOM_DPC_CPUCORE=0
+  DHDCFLAGS += -DPROP_TXSTATUS_VSDB
+ifeq ($(CONFIG_ARCH_MSM),y)
+  DHDCFLAGS += -DCUSTOM_DEF_TXGLOM_SIZE=32 -DDHD_TXBOUND=32
+endif
+  DHDCFLAGS += -DCUSTOM_MAX_TXGLOM_SIZE=32
+  DHDCFLAGS += -DDHD_TCP_WINSIZE_ADJUST
+  DHDCFLAGS += -DSOFTAP_TPUT_ENHANCE
+  DHDCFLAGS += -DWAIT_DEQUEUE
+
+# For Passpoint
+  DHDCFLAGS += -DWL11U
+# For CCX
+  DHDCFLAGS += -DBCMCCX
+#  DHDCFLAGS += -DDISABLE_11AC
+#  DHDCFLAGS += -DWES_SUPPORT
+#  DHDCFLAGS += -DOKC_SUPPORT
+  DHDCFLAGS += -DWLTDLS
+# For V.E
+  DHDCFLAGS += -DWLFBT
+  DHDCFLAGS += -DDHD_ENABLE_LPC
+#  DHDCFLAGS += -DSUPPORT_IBSS
+  DHDCFLAGS += -DSUPPORT_LTECX
+  DHDCFLAGS += -DSUPPORT_2G_VHT
+  DHDCFLAGS += -DSUPPORT_WL_TXPOWER
+endif
+
+ifneq ($(CONFIG_BCM4335),)
+  DHDCFLAGS += -DBCM4335_CHIP
+  DHDCFLAGS += -DENABLE_BCN_LI_BCN_WAKEUP
+  DHDCFLAGS += -DSDIO_CRC_ERROR_FIX
+  DHDCFLAGS += -DROAM_CHANNEL_CACHE
+# tput enhancement
+  DHDCFLAGS += -DCUSTOM_GLOM_SETTING=8 -DCUSTOM_RXCHAIN=1
+  DHDCFLAGS += -DUSE_DYNAMIC_F2_BLKSIZE -DDYNAMIC_F2_BLKSIZE_FOR_NONLEGACY=128
+  DHDCFLAGS += -DBCMSDIOH_TXGLOM -DCUSTOM_TXGLOM=1 -DBCMSDIOH_TXGLOM_HIGHSPEED
+  DHDCFLAGS += -DDHDTCPACK_SUPPRESS
+# DHDCFLAGS += -DDHD_SET_FW_HIGHSPEED
+  DHDCFLAGS += -DUSE_WL_TXBF
+  DHDCFLAGS += -DUSE_WL_FRAMEBURST
+  DHDCFLAGS += -DRXFRAME_THREAD
+  DHDCFLAGS += -DCUSTOM_AMPDU_BA_WSIZE=64
+  DHDCFLAGS += -DCUSTOM_DPC_CPUCORE=0
+  DHDCFLAGS += -DPROP_TXSTATUS_VSDB
+  DHDCFLAGS += -DDHD_TCP_WINSIZE_ADJUST
+  DHDCFLAGS += -DSOFTAP_TPUT_ENHANCE
+ifeq ($(CONFIG_ARCH_MSM),y)
+  DHDCFLAGS += -DCUSTOM_DEF_TXGLOM_SIZE=32 -DDHD_TXBOUND=32
+endif
+  DHDCFLAGS += -DCUSTOM_MAX_TXGLOM_SIZE=32
+# DHDCFLAGS += -DTPUT_DEBUG
+
+# For Passpoint
+  DHDCFLAGS += -DWL11U
+# For CCX
+  DHDCFLAGS += -DBCMCCX
+#  DHDCFLAGS += -DDISABLE_11AC
+#  DHDCFLAGS += -DWES_SUPPORT
+#  DHDCFLAGS += -DOKC_SUPPORT
+  DHDCFLAGS += -DWLTDLS
+# For V.E
+  DHDCFLAGS += -DWLFBT
+  DHDCFLAGS += -DDHD_ENABLE_LPC
+#  DHDCFLAGS += -DSUPPORT_IBSS
+  DHDCFLAGS += -DSUPPORT_LTECX
+  DHDCFLAGS += -DSUPPORT_2G_VHT
+  DHDCFLAGS += -DSUPPORT_WL_TXPOWER
+  DHDCFLAGS += -DWAIT_DEQUEUE
+
+# For BT LOCK
+ifeq ($(CONFIG_BCM4335BT),y)
+#  DHDCFLAGS += -DENABLE_4335BT_WAR
+endif
+endif
+
+ifneq ($(CONFIG_BCM43341),)
+  DHDCFLAGS += -DBCM43341_CHIP
+  DHDCFLAGS += -DENABLE_BCN_LI_BCN_WAKEUP
+  # tput enhancement
+  DHDCFLAGS += -DCUSTOM_GLOM_SETTING=8 -DCUSTOM_RXCHAIN=1
+  DHDCFLAGS += -DUSE_DYNAMIC_F2_BLKSIZE -DDYNAMIC_F2_BLKSIZE_FOR_NONLEGACY=128
+  DHDCFLAGS += -DBCMSDIOH_TXGLOM -DCUSTOM_TXGLOM=1 -DBCMSDIOH_TXGLOM_HIGHSPEED
+  DHDCFLAGS += -DDHDTCPACK_SUPPRESS
+  DHDCFLAGS += -DUSE_WL_FRAMEBURST
+  DHDCFLAGS += -DRXFRAME_THREAD
+  DHDCFLAGS += -DCUSTOM_DPC_CPUCORE=0
+  DHDCFLAGS += -DPROP_TXSTATUS_VSDB
+#  DHDCFLAGS += -DSOFTAP_TPUT_ENHANCE
+#  DHDCFLAGS += -DDHD_TCP_WINSIZE_ADJUST
+#  DHDCFLAGS += -DROAM_CHANNEL_CACHE
+ifeq ($(CONFIG_ARCH_MSM),y)
+  DHDCFLAGS += -DCUSTOM_DEF_TXGLOM_SIZE=32 -DDHD_TXBOUND=32
+endif
+  DHDCFLAGS += -DCUSTOM_MAX_TXGLOM_SIZE=32
+  DHDCFLAGS += -DWAIT_DEQUEUE
+endif
+
 ifneq ($(CONFIG_BCM4334),)
   DHDCFLAGS += -DBCM4334_CHIP
-  DHDCFLAGS += -DCONFIG_PM_LOCK
-  DHDCFLAGS += -DPROP_TXSTATUS -DPROP_TXSTATUS_VSDB
-  DHDCFLAGS += -DVSDB -DHT40_GO
-  DHDCFLAGS += -DWL_CFG80211_VSDB_PRIORITIZE_SCAN_REQUEST
-  DHDCFLAGS += -DDHD_USE_IDLECOUNT
-  DHDCFLAGS += -DSUPPORT_AMPDU_MPDU_CMD
+  DHDCFLAGS += -DSDIO_CRC_ERROR_FIX
+  DHDCFLAGS += -DWL_CFG80211_GON_COLLISION
   DHDCFLAGS += -DUSE_DYNAMIC_F2_BLKSIZE -DDYNAMIC_F2_BLKSIZE_FOR_NONLEGACY=64
   DHDCFLAGS += -DCUSTOM_GLOM_SETTING=5 -DENABLE_BCN_LI_BCN_WAKEUP
-#  DHDCFLAGS += -DROAM_AP_ENV_DETECTION
+  DHDCFLAGS += -DPROP_TXSTATUS_VSDB
+  DHDCFLAGS += -DRXFRAME_THREAD -DCUSTOM_RXCHAIN=1
+  DHDCFLAGS += -DCUSTOM_DPC_CPUCORE=0
+#  DHDCFLAGS += -DSOFTAP_TPUT_ENHANCE
+#  DHDCFLAGS += -DDHD_TCP_WINSIZE_ADJUST
+#  DHDCFLAGS += -DROAM_CHANNEL_CACHE
+  DHDCFLAGS += -DWAIT_DEQUEUE
 endif
 
 ifneq ($(CONFIG_BCM4330),)
   DHDCFLAGS += -DBCM4330_CHIP
   DHDCFLAGS += -DMCAST_LIST_ACCUMULATION
-  DHDCFLAGS += -DCONFIG_PM_LOCK
+  DHDCFLAGS += -DSDIO_CRC_ERROR_FIX
   DHDCFLAGS += -DCUSTOM_GLOM_SETTING=0
-  DHDCFLAGS += -DPASS_ARP_PACKET
-  DHDCFLAGS += -DWL_CFG80211_VSDB_PRIORITIZE_SCAN_REQUEST
-endif
+  DHDCFLAGS += -DWL_CFG80211_GON_COLLISION
 
-
-#############################
-# Platform dependent feature
-#############################
-
-DHDCFLAGS += -DGET_CUSTOM_MAC_ENABLE
-ifneq ($(CONFIG_BCMDHD),m)
-DHDCFLAGS += -DENABLE_INSMOD_NO_FW_LOAD
+  DHDCFLAGS += -DRXFRAME_THREAD -DCUSTOM_RXCHAIN=1
+  DHDCFLAGS += -DCUSTOM_DPC_CPUCORE=0
+#  DHDCFLAGS += -DPASS_ARP_PACKET
+  DHDCFLAGS += -DWAIT_DEQUEUE
 endif
 
 
@@ -170,39 +337,29 @@ EXTRA_CFLAGS += -I$(src)/src/dongle/
 EXTRA_CFLAGS += -I$(src)/src/bcmsdio/sys/
 EXTRA_CFLAGS += -I$(src)/src/wl/sys/
 EXTRA_CFLAGS += -I$(src)/src/shared/
-EXTRA_CFLAGS += -I$(src)/src/shared/bcmwifi/src/
 EXTRA_CFLAGS += -I$(src)/src/shared/bcmwifi/include/
+EXTRA_CFLAGS += -I$(src)/src/shared/bcmwifi/src/
 
 KBUILD_CFLAGS += -I$(LINUXDIR)/include -I$(shell pwd)
 
-DHDOFILES := \
-	     src/bcmsdio/sys/bcmsdh.o \
-	     src/bcmsdio/sys/bcmsdh_linux.o \
-	     src/bcmsdio/sys/bcmsdh_sdmmc.o \
-	     src/bcmsdio/sys/bcmsdh_sdmmc_linux.o \
-	     src/dhd/sys/dhd_cdc.o \
-	     src/dhd/sys/dhd_common.o \
-	     src/dhd/sys/dhd_custom_gpio.o \
-	     src/dhd/sys/dhd_linux.o \
-	     src/dhd/sys/dhd_linux_sched.o \
-	     src/dhd/sys/dhd_cfg80211.o \
-	     src/dhd/sys/dhd_sdio.o \
-	     src/shared/aiutils.o \
-	     src/shared/bcmevent.o \
-	     src/shared/bcmutils.o \
-	     src/shared/bcmwifi/src/bcmwifi_channels.o \
-	     src/shared/hndpmu.o \
-	     src/shared/linux_osl.o \
-	     src/shared/sbutils.o \
-	     src/shared/siutils.o \
-	     src/wl/sys/wl_android.o \
-	     src/wl/sys/wl_cfg80211.o \
-	     src/wl/sys/wl_cfgp2p.o \
-	     src/wl/sys/wldev_common.o \
-	     src/wl/sys/wl_linux_mon.o \
-	     src/wl/sys/wl_roam.o
+DHDOFILES := src/bcmsdio/sys/bcmsdh.o	src/bcmsdio/sys/bcmsdh_linux.o \
+	 src/bcmsdio/sys/bcmsdh_sdmmc.o	src/bcmsdio/sys/bcmsdh_sdmmc_linux.o \
+	 src/dhd/sys/dhd_cdc.o 		src/dhd/sys/dhd_pno.o\
+	 src/dhd/sys/dhd_common.o\
+	 src/dhd/sys/dhd_wlfc.o		src/dhd/sys/dhd_ip.o \
+	 src/dhd/sys/dhd_custom_gpio.o  src/dhd/sys/dhd_custom_lge.o \
+	 src/dhd/sys/dhd_linux.o	src/dhd/sys/dhd_linux_sched.o \
+	 src/dhd/sys/dhd_cfg80211.o	src/dhd/sys/dhd_sdio.o \
+	 src/shared/aiutils.o		src/shared/bcmevent.o \
+	 src/shared/bcmutils.o		src/shared/bcmwifi/src/bcmwifi_channels.o \
+	 src/shared/hndpmu.o		src/shared/linux_osl.o \
+	 src/shared/sbutils.o		src/shared/siutils.o \
+	 src/wl/sys/wl_android.o	src/wl/sys/wl_cfg80211.o \
+	 src/wl/sys/wl_cfgp2p.o		src/wl/sys/wldev_common.o \
+	 src/wl/sys/wl_linux_mon.o	src/wl/sys/wl_roam.o
 
 obj-$(CONFIG_BCMDHD) += bcmdhd.o
+
 bcmdhd-objs := $(DHDOFILES)
 
 all:

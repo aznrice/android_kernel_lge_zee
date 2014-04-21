@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -313,24 +313,12 @@ static void slim_report(struct work_struct *work)
 			sbdrv->device_down(sbdev);
 		return;
 	}
-	if (sbdev->notified)
+	if (sbdev->notified || !sbdrv)
 		return;
 	ret = slim_get_logical_addr(sbdev, sbdev->e_addr, 6, &laddr);
 	if (!ret) {
-//[LGE_BSP_AUDIO_S] taeho.youn@lge.com	for WBT
-#if 0
-		if (sbdrv)
-			sbdev->notified = true;
-		if (sbdrv->device_up)
-			sbdrv->device_up(sbdev);
-#else
-		if (sbdrv) {
-			sbdev->notified = true;
-			if (sbdrv->device_up)
-				sbdrv->device_up(sbdev);
-		}
-#endif
-//[LGE_BSP_AUDIO_E]
+		sbdev->notified = true;
+		sbdrv->device_up(sbdev);
 	}
 }
 
@@ -784,10 +772,10 @@ int slim_assign_laddr(struct slim_controller *ctrl, const u8 *e_addr,
 	bool exists = false;
 	struct slim_device *sbdev;
 #ifdef CONFIG_SND_SOC_ES325_SLIM
-	/* LGE_BSP_AUDIO
-	* assign laddr to slim slave : Audience eS325 ALSA SoC Audio driver
-	* 2013-01-10, jeremy.pi@lge.com
-	*/
+	/*              
+                                                                    
+                                
+ */
 	struct sbi_boardinfo *bi;
 	struct list_head *pos;
 #endif /* CONFIG_SND_SOC_ES325_SLIM */
@@ -833,10 +821,10 @@ int slim_assign_laddr(struct slim_controller *ctrl, const u8 *e_addr,
 	ctrl->addrt[i].laddr = *laddr;
 
 #ifdef CONFIG_SND_SOC_ES325_SLIM
-	/* LGE_BSP_AUDIO
-	* assign laddr to slim slave : Audience eS325 ALSA SoC Audio driver
-	* 2013-01-10, jeremy.pi@lge.com
-	*/
+	/*              
+                                                                    
+                                
+ */
 	list_for_each(pos, &board_list) {
 		bi = list_entry(pos, struct sbi_boardinfo, list);
 		if (memcmp(e_addr, bi->board_info.slim_slave->e_addr, 6) == 0) {
@@ -1170,8 +1158,11 @@ int slim_alloc_mgrports(struct slim_device *sb, enum slim_port_req req,
 		}
 		break;
 	}
-	if (i >= ctrl->nports)
+	if (i >= ctrl->nports) {
 		ret = -EDQUOT;
+		goto alloc_err;
+	}
+	ret = 0;
 	for (j = i; j < i + nphysp; j++) {
 		ctrl->ports[j].state = SLIM_P_UNCFG;
 		ctrl->ports[j].req = req;
@@ -1179,7 +1170,8 @@ int slim_alloc_mgrports(struct slim_device *sb, enum slim_port_req req,
 			ctrl->ports[j].flow = SLIM_SINK;
 		else
 			ctrl->ports[j].flow = SLIM_SRC;
-		ret = ctrl->config_port(ctrl, j);
+		if (ctrl->alloc_port)
+			ret = ctrl->alloc_port(ctrl, j);
 		if (ret) {
 			for (; j >= i; j--)
 				ctrl->ports[j].state = SLIM_P_FREE;
@@ -1207,17 +1199,26 @@ int slim_dealloc_mgrports(struct slim_device *sb, u32 *hdl, int nports)
 	for (i = 0; i < nports; i++) {
 		u8 pn;
 		pn = SLIM_HDL_TO_PORT(hdl[i]);
-		if (ctrl->ports[pn].state == SLIM_P_CFG) {
-			int j;
-			dev_err(&ctrl->dev, "Can't dealloc connected port:%d",
-					i);
+
+		if (pn >= ctrl->nports || ctrl->ports[pn].state == SLIM_P_CFG) {
+			int j, ret;
+			if (pn >= ctrl->nports) {
+				dev_err(&ctrl->dev, "invalid port number");
+				ret = -EINVAL;
+			} else {
+				dev_err(&ctrl->dev,
+					"Can't dealloc connected port:%d", i);
+				ret = -EISCONN;
+			}
 			for (j = i - 1; j >= 0; j--) {
 				pn = SLIM_HDL_TO_PORT(hdl[j]);
 				ctrl->ports[pn].state = SLIM_P_UNCFG;
 			}
 			mutex_unlock(&ctrl->m_ctrl);
-			return -EISCONN;
+			return ret;
 		}
+		if (ctrl->dealloc_port)
+			ctrl->dealloc_port(ctrl, pn);
 		ctrl->ports[pn].state = SLIM_P_FREE;
 	}
 	mutex_unlock(&ctrl->m_ctrl);
@@ -1296,6 +1297,8 @@ static int disconnect_port_ch(struct slim_controller *ctrl, u32 ph)
  * Channel specified in chanh needs to be allocated first.
  * Returns -EALREADY if source is already configured for this channel.
  * Returns -ENOTCONN if channel is not allocated
+ * Returns -EINVAL if invalid direction is specified for non-manager port,
+ * or if the manager side port number is out of bounds, or in incorrect state
  */
 int slim_connect_src(struct slim_device *sb, u32 srch, u16 chanh)
 {
@@ -1304,11 +1307,22 @@ int slim_connect_src(struct slim_device *sb, u32 srch, u16 chanh)
 	u8 chan = SLIM_HDL_TO_CHIDX(chanh);
 	struct slim_ich *slc = &ctrl->chans[chan];
 	enum slim_port_flow flow = SLIM_HDL_TO_FLOW(srch);
+	u8 la = SLIM_HDL_TO_LA(srch);
 
-	if (flow != SLIM_SRC)
+	/* manager ports don't have direction when they are allocated */
+	if (la != SLIM_LA_MANAGER && flow != SLIM_SRC)
 		return -EINVAL;
 
 	mutex_lock(&ctrl->sched.m_reconf);
+
+	if (la == SLIM_LA_MANAGER) {
+		u8 pn = SLIM_HDL_TO_PORT(srch);
+		if (pn >= ctrl->nports ||
+			ctrl->ports[pn].state != SLIM_P_UNCFG) {
+			ret = -EINVAL;
+			goto connect_src_err;
+		}
+	}
 
 	if (slc->state == SLIM_CH_FREE) {
 		ret = -ENOTCONN;
@@ -1345,6 +1359,9 @@ EXPORT_SYMBOL_GPL(slim_connect_src);
  * Channel specified in chanh needs to be allocated first.
  * Returns -EALREADY if sink is already configured for this channel.
  * Returns -ENOTCONN if channel is not allocated
+ * Returns -EINVAL if invalid parameters are passed, or invalid direction is
+ * specified for non-manager port, or if the manager side port number is out of
+ * bounds, or in incorrect state
  */
 int slim_connect_sink(struct slim_device *sb, u32 *sinkh, int nsink, u16 chanh)
 {
@@ -1371,8 +1388,14 @@ int slim_connect_sink(struct slim_device *sb, u32 *sinkh, int nsink, u16 chanh)
 
 	for (j = 0; j < nsink; j++) {
 		enum slim_port_flow flow = SLIM_HDL_TO_FLOW(sinkh[j]);
-		if (flow != SLIM_SINK)
+		u8 la = SLIM_HDL_TO_LA(sinkh[j]);
+		u8 pn = SLIM_HDL_TO_PORT(sinkh[j]);
+		if (la != SLIM_LA_MANAGER && flow != SLIM_SINK)
 			ret = -EINVAL;
+		else if (la == SLIM_LA_MANAGER &&
+				(pn >= ctrl->nports ||
+				ctrl->ports[pn].state != SLIM_P_UNCFG))
+				ret = -EINVAL;
 		else
 			ret = connect_port_ch(ctrl, chan, sinkh[j], SLIM_SINK);
 		if (ret) {
@@ -1525,7 +1548,8 @@ static void slim_add_ch(struct slim_controller *ctrl, struct slim_ich *slc)
 	for (j = *len - 1; j > i; j--)
 		arr[j] = arr[j - 1];
 	arr[i] = slc;
-	ctrl->sched.usedslots += sl;
+	if (!ctrl->allocbw)
+		ctrl->sched.usedslots += sl;
 
 	return;
 }
@@ -2631,7 +2655,8 @@ static void slim_chan_changes(struct slim_device *sb, bool revert)
 				u32 sl = slc->seglen << slc->rootexp;
 				if (slc->coeff == SLIM_COEFF_3)
 					sl *= 3;
-				ctrl->sched.usedslots -= sl;
+				if (!ctrl->allocbw)
+					ctrl->sched.usedslots -= sl;
 				slim_remove_ch(ctrl, slc);
 				slc->state = SLIM_CH_DEFINED;
 			}
@@ -2652,7 +2677,8 @@ static void slim_chan_changes(struct slim_device *sb, bool revert)
 		if (revert || slc->def > 0) {
 			if (slc->coeff == SLIM_COEFF_3)
 				sl *= 3;
-			ctrl->sched.usedslots += sl;
+			if (!ctrl->allocbw)
+				ctrl->sched.usedslots += sl;
 			if (revert)
 				slc->def++;
 			slc->state = SLIM_CH_ACTIVE;
@@ -2746,7 +2772,8 @@ int slim_reconfigure_now(struct slim_device *sb)
 		u32 sl = slc->seglen << slc->rootexp;
 		if (slc->coeff == SLIM_COEFF_3)
 			sl *= 3;
-		ctrl->sched.usedslots -= sl;
+		if (!ctrl->allocbw)
+			ctrl->sched.usedslots -= sl;
 		slc->state = SLIM_CH_PENDING_REMOVAL;
 	}
 	list_for_each_entry(pch, &sb->mark_suspend, pending) {
@@ -3101,8 +3128,15 @@ int slim_ctrl_clk_pause(struct slim_controller *ctrl, bool wakeup, u8 restart)
 		 */
 		if (ctrl->clk_state == SLIM_CLK_PAUSED && ctrl->wakeup)
 			ret = ctrl->wakeup(ctrl);
+		/*
+		 * If wakeup fails, make sure that next attempt can succeed.
+		 * Since we already consumed pause_comp, complete it so
+		 * that next wakeup isn't blocked forever
+		 */
 		if (!ret)
 			ctrl->clk_state = SLIM_CLK_ACTIVE;
+		else
+			complete(&ctrl->pause_comp);
 		mutex_unlock(&ctrl->m_ctrl);
 		return ret;
 	} else {

@@ -147,7 +147,7 @@ typedef int (*msm_queue_find_func)(void *d1, void *d2);
 
 static void msm_init_queue(struct msm_queue_head *qhead)
 {
-	//BUG_ON(!qhead);     /* LGE_CHANGE, No more needs to panic, 2013-11-25, jungki.kim@lge.com */
+	//                                                                                            
 
 	INIT_LIST_HEAD(&qhead->list);
 	spin_lock_init(&qhead->lock);
@@ -438,7 +438,7 @@ static inline int __msm_sd_close_subdevs(struct msm_sd_subdev *msm_sd,
 static inline int __msm_destroy_session_streams(void *d1, void *d2)
 {
 	struct msm_stream *stream = d1;
-	pr_err("%s: Destroyed here due to list is not empty\n", __func__);
+    pr_err("%s: Destroyed here due to list is not empty\n", __func__);  /*                                                             */
 	INIT_LIST_HEAD(&stream->queued_list);
 	return 0;
 }
@@ -526,7 +526,7 @@ static long msm_private_ioctl(struct file *file, void *fh,
 	struct msm_session *session;
 	unsigned int session_id;
 	unsigned int stream_id;
-	unsigned long spin_flags = 0; //QCT_PATCH, fix the kernel panic in wake_up, 2013-07-16, freeso.kim@lge.com
+	unsigned long spin_flags = 0;
 
 	event_data = (struct msm_v4l2_event_data *)
 		((struct v4l2_event *)arg)->u.data;
@@ -573,14 +573,12 @@ static long msm_private_ioctl(struct file *file, void *fh,
 		}
 
 		spin_lock_irqsave(&(session->command_ack_q.lock),
-		   spin_flags); //QCT_PATCH, fix the kernel panic in wake_up, 2013-07-16, freeso.kim@lge.com
-
+		   spin_flags);
 		ret_cmd->event = *(struct v4l2_event *)arg;
 		msm_enqueue(&cmd_ack->command_q, &ret_cmd->list);
 		wake_up(&cmd_ack->wait);
-
 		spin_unlock_irqrestore(&(session->command_ack_q.lock),
-		   spin_flags); //QCT_PATCH, fix the kernel panic in wake_up, 2013-07-16, freeso.kim@lge.com
+		   spin_flags);
 	}
 		break;
 
@@ -623,7 +621,7 @@ static unsigned int msm_poll(struct file *f,
 	int rc = 0;
 	struct v4l2_fh *eventq = f->private_data;
 
-	//BUG_ON(!eventq);    /* LGE_CHANGE, No more needs to panic, 2013-11-25, jungki.kim@lge.com */
+	//                                                                                            
 
 	poll_wait(f, &eventq->wait, pll_table);
 
@@ -682,25 +680,27 @@ int msm_post_event(struct v4l2_event *event, int timeout)
 	}
 
 	/* should wait on session based condition */
-	rc = wait_event_interruptible_timeout(cmd_ack->wait,
-		!list_empty_careful(&cmd_ack->command_q.list),
-		msecs_to_jiffies(timeout));
+	do {
+		rc = wait_event_interruptible_timeout(cmd_ack->wait,
+			!list_empty_careful(&cmd_ack->command_q.list),
+			msecs_to_jiffies(timeout));
+		if (rc != -ERESTARTSYS)
+			break;
+	} while (1);
+
 	if (list_empty_careful(&cmd_ack->command_q.list)) {
 		if (!rc) {
-//			pr_err("%s: Timed out\n", __func__);
-			pr_err(" ------------- msm_post_event Timed Out -------------");
-			pr_err(" session_id %d  : stream_id %d \n",event_data->session_id,event_data->stream_id);
-			pr_err(" event_id %d : command %d : arg_value %d\n ",event->id,(event_data->command & 0x0000ffff), event_data->arg_value);
+			pr_err("%s: Timed out\n", __func__);
 			rc = -ETIMEDOUT;
 		}
 		if (rc < 0) {
 			pr_err("%s: rc = %d\n", __func__, rc);
 			mutex_unlock(&session->lock);
-/* LGE_CHANGE_S, Camera Recovery Code, 2013-08-20, jungki.kim@lge.com */
+/*                                                                    */
 			pr_err("%s: ===== Camera Recovery Start! ===== \n", __func__);
 			dump_stack();
 			send_sig(SIGKILL, current, 0);
-/* LGE_CHANGE_E, Camera Recovery Code, 2013-08-20, jungki.kim@lge.com */
+/*                                                                    */
 			return rc;
 		}
 	}
@@ -774,7 +774,7 @@ static int msm_open(struct file *filep)
 	int rc;
 	unsigned long flags;
 	struct msm_video_device *pvdev = video_drvdata(filep);
-	//BUG_ON(!pvdev);     /* LGE_CHANGE, No more needs to panic, 2013-11-25, jungki.kim@lge.com */
+	//                                                                                            
 
 	/* !!! only ONE open is allowed !!! */
 	if (atomic_read(&pvdev->opened))
@@ -895,8 +895,8 @@ static void msm_sd_notify(struct v4l2_subdev *sd,
 	int rc = 0;
 	struct v4l2_subdev *subdev = NULL;
 
-	//BUG_ON(!sd);    /* LGE_CHANGE, No more needs to panic, 2013-11-25, jungki.kim@lge.com */
-	//BUG_ON(!arg);   /* LGE_CHANGE, No more needs to panic, 2013-11-25, jungki.kim@lge.com */
+	//                                                                                        
+	//                                                                                        
 
 	/* Check if subdev exists before processing*/
 	if (!msm_sd_find(sd->name))
@@ -1006,8 +1006,10 @@ static int __devinit msm_probe(struct platform_device *pdev)
 	video_set_drvdata(pvdev->vdev, pvdev);
 
 	msm_session_q = kzalloc(sizeof(*msm_session_q), GFP_KERNEL);
-	if (WARN_ON(!msm_session_q))
-		goto v4l2_fail;
+	if (WARN_ON(!msm_session_q)) {
+		rc = -ENOMEM;
+		goto session_fail;
+	}
 
 	msm_init_queue(msm_session_q);
 	spin_lock_init(&msm_eventq_lock);
@@ -1015,6 +1017,8 @@ static int __devinit msm_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&ordered_sd_list);
 	goto probe_end;
 
+session_fail:
+	video_unregister_device(pvdev->vdev);
 v4l2_fail:
 	v4l2_device_unregister(pvdev->vdev->v4l2_dev);
 register_fail:

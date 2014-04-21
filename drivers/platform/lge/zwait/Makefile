@@ -4,7 +4,6 @@ zwait-objs := zwait-dev.o \
 	      zwait-power.o \
 	      zwait-led.o \
 	      zwait-rtc.o \
-	      zwait-irq.o \
 	      $(obj-zwait-event-y)
 
 obj-$(CONFIG_ZERO_WAIT) += zwait.o

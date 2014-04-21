@@ -53,6 +53,8 @@ void diag_hdlc_encode(struct diag_send_desc_type *src_desc,
 
 int diag_hdlc_decode(struct diag_hdlc_decode_type *hdlc);
 
+int crc_check(uint8_t *buf, uint16_t len);
+
 #define ESC_CHAR     0x7D
 #define ESC_MASK     0x20
 

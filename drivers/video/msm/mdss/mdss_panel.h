@@ -24,6 +24,7 @@ struct panel_id {
 };
 
 #define DEFAULT_FRAME_RATE	60
+#define MDSS_DSI_RST_SEQ_LEN	10
 
 /* panel type list */
 #define NO_PANEL		0xffff	/* No Panel */
@@ -55,6 +56,38 @@ enum {
 	DISPLAY_2,		/* attached on second device */
 	DISPLAY_3,              /* attached on third writeback device */
 	MAX_PHYS_TARGET_NUM,
+};
+
+enum {
+	MDSS_PANEL_INTF_INVALID = -1,
+	MDSS_PANEL_INTF_DSI,
+	MDSS_PANEL_INTF_EDP,
+	MDSS_PANEL_INTF_HDMI,
+};
+
+enum {
+	MODE_GPIO_NOT_VALID = 0,
+	MODE_GPIO_HIGH,
+	MODE_GPIO_LOW,
+};
+
+#define MDSS_MAX_PANEL_LEN      256
+#define MDSS_INTF_MAX_NAME_LEN 5
+struct mdss_panel_intf {
+	char name[MDSS_INTF_MAX_NAME_LEN];
+	int  type;
+};
+
+struct mdss_panel_cfg {
+	char arg_cfg[MDSS_MAX_PANEL_LEN + 1];
+	int  pan_intf;
+	bool lk_cfg;
+	bool init_done;
+};
+
+struct mdss_panel_recovery {
+	void (*fxn)(void *ctx);
+	void *data;
 };
 
 /**
@@ -92,7 +125,8 @@ enum {
  * @MDSS_EVENT_PANEL_CLK_CTRL:	panel clock control
 				 - 0 clock disable
 				 - 1 clock enable
- * @MDSS_EVENT_DSI_CMDLIST_KOFF: kickoff sending dcs command from command list
+ * @MDSS_EVENT_ENABLE_PARTIAL_UPDATE: Event to update ROI of the panel.
+ * @MDSS_EVENT_DSI_CMDLIST_KOFF: acquire dsi_mdp_busy lock before kickoff.
  */
 enum mdss_intf_events {
 	MDSS_EVENT_RESET = 1,
@@ -106,13 +140,11 @@ enum mdss_intf_events {
 	MDSS_EVENT_CHECK_PARAMS,
 	MDSS_EVENT_CONT_SPLASH_BEGIN,
 	MDSS_EVENT_CONT_SPLASH_FINISH,
-#ifdef CONFIG_OLED_SUPPORT
-	MDSS_EVENT_FIRST_FRAME_UPDATE,
-#endif
 	MDSS_EVENT_PANEL_UPDATE_FPS,
 	MDSS_EVENT_FB_REGISTERED,
 	MDSS_EVENT_PANEL_CLK_CTRL,
 	MDSS_EVENT_DSI_CMDLIST_KOFF,
+	MDSS_EVENT_ENABLE_PARTIAL_UPDATE,
 };
 
 struct lcd_panel_info {
@@ -129,12 +161,6 @@ struct lcd_panel_info {
 	u32 xres_pad;
 	/* Pad height */
 	u32 yres_pad;
-#ifdef CONFIG_OLED_SUPPORT
-	/* Margin width */
-	u32 xres_margin;
-	/* Margin height */
-	u32 yres_margin;
-#endif
 };
 
 
@@ -144,9 +170,9 @@ struct mdss_dsi_phy_ctrl {
 	uint32_t timing[12];
 	uint32_t ctrl[4];
 	uint32_t strength[2];
-	char bistCtrl[6];
+	char bistctrl[6];
 	uint32_t pll[21];
-	char laneCfg[45];
+	char lanecfg[45];
 };
 
 struct mipi_panel_info {
@@ -169,7 +195,7 @@ struct mipi_panel_info {
 	char t_clk_post; /* 0xc0, DSI_CLKOUT_TIMING_CTRL */
 	char t_clk_pre;  /* 0xc0, DSI_CLKOUT_TIMING_CTRL */
 	char vc;	/* virtual channel */
-	struct mdss_dsi_phy_ctrl *dsi_phy_db;
+	struct mdss_dsi_phy_ctrl dsi_phy_db;
 	/* video mode */
 	char pulse_mode_hsa_he;
 	char hfp_power_stop;
@@ -196,6 +222,9 @@ struct mipi_panel_info {
 
 	char vsync_enable;
 	char hw_vsync_mode;
+
+	char lp11_init;
+	u32  init_delay;
 };
 
 enum dynamic_fps_update {
@@ -237,6 +266,8 @@ struct fbc_panel_info {
 struct mdss_panel_info {
 	u32 xres;
 	u32 yres;
+	u32 physical_width;
+	u32 physical_height;
 	u32 bpp;
 	u32 type;
 	u32 wait_cycle;
@@ -250,7 +281,13 @@ struct mdss_panel_info {
 	u32 frame_count;
 	u32 is_3d_panel;
 	u32 out_format;
+	u32 rst_seq[MDSS_DSI_RST_SEQ_LEN];
+	u32 rst_seq_len;
 	u32 vic; /* video identification code */
+	u32 roi_x;
+	u32 roi_y;
+	u32 roi_w;
+	u32 roi_h;
 	int bklt_ctrl;	/* backlight ctrl */
 	int pwm_pmic_gpio;
 	int pwm_lpg_chan;
@@ -259,13 +296,17 @@ struct mdss_panel_info {
 	int blmap_size;
 	char *blmap;
 #endif
+	u32 mode_gpio_state;
 	bool dynamic_fps;
 	char dfps_update;
 	int new_fps;
 
 	u32 cont_splash_enabled;
+	u32 partial_update_enabled;
 	struct ion_handle *splash_ihdl;
 	u32 panel_power_on;
+
+	uint32_t panel_dead;
 
 	struct lcd_panel_info lcdc;
 	struct fbc_panel_info fbc;
@@ -363,4 +404,37 @@ static inline int mdss_panel_get_htotal(struct mdss_panel_info *pinfo)
 
 int mdss_register_panel(struct platform_device *pdev,
 	struct mdss_panel_data *pdata);
+
+/**
+ * mdss_panel_intf_type: - checks if a given intf type is primary
+ * @intf_val: panel interface type of the individual controller
+ *
+ * Individual controller queries with MDP to check if it is
+ * configured as the primary interface.
+ *
+ * returns a pointer to the configured structure mdss_panel_cfg
+ * to the controller that's configured as the primary panel interface.
+ * returns NULL on error or if @intf_val is not the configured
+ * controller.
+ */
+struct mdss_panel_cfg *mdss_panel_intf_type(int intf_val);
+
+/**
+ * mdss_panel_get_boot_cfg() - checks if bootloader config present
+ *
+ * Function returns true if bootloader has configured the parameters
+ * for primary controller and panel config data.
+ *
+ * returns true if bootloader configured, else false
+ */
+int mdss_panel_get_boot_cfg(void);
+
+/**
+ * mdss_is_ready() - checks if mdss is probed and ready
+ *
+ * Checks if mdss resources have been initialized
+ *
+ * returns true if mdss is ready, else returns false.
+ */
+bool mdss_is_ready(void);
 #endif /* MDSS_PANEL_H */

@@ -36,6 +36,7 @@
 			status = "ok";
 			qcom,vddsafe-mv = <4380>;
 			qcom,vbatdet-delta-mv = <100>;
+			qcom,vinmin-mv = <4600>;
 			qcom,ibatterm-ma = <100>;
 			qcom,tchg-mins = <480>;
 			qcom,maxinput-dc-ma = <700>;
@@ -112,7 +113,7 @@
 	    };
 
 		qcom,leds@d300 {
-			flash_boost-supply = <&pm8941_chg_boost>;
+			flash-boost-supply = <&pm8941_chg_boost>;
 		};
 
 		qcom,leds@e200 {

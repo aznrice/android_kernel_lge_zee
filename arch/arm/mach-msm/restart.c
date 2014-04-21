@@ -51,6 +51,10 @@
 
 #define RESTART_REASON_ADDR 0x65C
 #define DLOAD_MODE_ADDR     0x0
+#define EMERGENCY_DLOAD_MODE_ADDR    0xFE0
+#define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
+#define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
+#define EMERGENCY_DLOAD_MAGIC3    0x77777777
 
 #define SCM_IO_DISABLE_PMIC_ARBITER	1
 
@@ -70,17 +74,13 @@ static void __iomem *msm_tmr0_base;
 static int in_panic;
 static void *dload_mode_addr;
 static bool dload_mode_enabled;
+static void *emergency_dload_mode_addr;
 
 /* Download mode master kill-switch */
 static int dload_set(const char *val, struct kernel_param *kp);
-#ifdef CONFIG_LGE_HANDLE_PANIC
-static int download_mode = 0;
-#else
-static int download_mode = 1;
-#endif
+static int download_mode;
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
-
 static int panic_prep_restart(struct notifier_block *this,
 			      unsigned long event, void *ptr)
 {
@@ -103,14 +103,25 @@ static void set_dload_mode(int on)
 	}
 }
 
-#ifdef CONFIG_LGE_HANDLE_PANIC
-	/* Warning Error clear */
-#else
 static bool get_dload_mode(void)
 {
 	return dload_mode_enabled;
 }
-#endif
+
+static void enable_emergency_dload_mode(void)
+{
+	if (emergency_dload_mode_addr) {
+		__raw_writel(EMERGENCY_DLOAD_MAGIC1,
+				emergency_dload_mode_addr);
+		__raw_writel(EMERGENCY_DLOAD_MAGIC2,
+				emergency_dload_mode_addr +
+				sizeof(unsigned int));
+		__raw_writel(EMERGENCY_DLOAD_MAGIC3,
+				emergency_dload_mode_addr +
+				(2 * sizeof(unsigned int)));
+		mb();
+	}
+}
 
 static int dload_set(const char *val, struct kernel_param *kp)
 {
@@ -139,6 +150,11 @@ static int dload_set(const char *val, struct kernel_param *kp)
 #else
 #define set_dload_mode(x) do {} while (0)
 
+static void enable_emergency_dload_mode(void)
+{
+	printk(KERN_ERR "dload mode is not enabled on target\n");
+}
+
 static bool get_dload_mode(void)
 {
 	return false;
@@ -165,7 +181,7 @@ static void halt_spmi_pmic_arbiter(void)
 		scm_call_atomic1(SCM_SVC_PWR, SCM_IO_DISABLE_PMIC_ARBITER, 0);
 	}
 }
- 
+
 static void __msm_power_off(int lower_pshold)
 {
 	printk(KERN_CRIT "Powering off the SoC\n");
@@ -258,23 +274,19 @@ static void msm_restart_prepare(const char *cmd)
 #endif
 
 	pm8xxx_reset_pwr_off(1);
-#ifdef CONFIG_LGE_HANDLE_PANIC	
-	qpnp_pon_system_pwr_off(1);
-#else
+
 	/* Hard reset the PMIC unless memory contents must be maintained. */
-	if (get_dload_mode() || (cmd != NULL && cmd[0] != '\0'))
+	/*                                                                          */
+	if (true || get_dload_mode() || (cmd != NULL && cmd[0] != '\0'))
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
 	else
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
-#endif
 
 	if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
 			__raw_writel(0x77665500, restart_reason);
 		} else if (!strncmp(cmd, "recovery", 8)) {
 			__raw_writel(0x77665502, restart_reason);
-		} else if (!strncmp(cmd, "adbrecovery", 11)) {
-			__raw_writel(0x77665511, restart_reason);
 #ifdef CONFIG_LGE_BNR_RECOVERY_REBOOT
 			/* PC Sync B&R : Add restart reason */
 		} else if (!strncmp(cmd, "--bnr_recovery", 14)) {
@@ -289,21 +301,21 @@ static void msm_restart_prepare(const char *cmd)
 			unsigned long code;
 			code = simple_strtoul(cmd + 4, NULL, 16) & 0xff;
 			__raw_writel(0x6f656d00 | code, restart_reason);
+		} else if (!strncmp(cmd, "edl", 3)) {
+			enable_emergency_dload_mode();
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
 	}
 #ifdef CONFIG_LGE_HANDLE_PANIC
-	else {
+	else
 		__raw_writel(0x77665503, restart_reason);
-	}
 
 	if (restart_mode == RESTART_DLOAD)
 		lge_set_restart_reason(LAF_DLOAD_MODE);
 
-	if (in_panic) {
+	if (in_panic)
 		lge_set_panic_reason();
-	}
 #endif
 	flush_cache_all();
 	outer_flush_all();
@@ -375,6 +387,8 @@ static int __init msm_restart_init(void)
 #ifdef CONFIG_MSM_DLOAD_MODE
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
 	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
+	emergency_dload_mode_addr = MSM_IMEM_BASE +
+		EMERGENCY_DLOAD_MODE_ADDR;
 	set_dload_mode(download_mode);
 #endif
 	msm_tmr0_base = msm_timer_get_timer0_base();
@@ -387,4 +401,3 @@ static int __init msm_restart_init(void)
 	return 0;
 }
 early_initcall(msm_restart_init);
-

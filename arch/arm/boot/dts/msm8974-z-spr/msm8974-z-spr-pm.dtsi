@@ -103,13 +103,6 @@
 			status = "disable";
 		};
 	};
-
-	qcom,pm8941@1 {
-		qcom,leds@e200 {
-			status = "ok";
-			revision = "...rev_c";
-		};
-	};
 };
 
 &pm8941_gpios {
@@ -406,7 +399,6 @@
 			qcom,init-voltage = <3300000>;
 		};
 	};
-
         rpm-regulator-ldoa19 { 
 		pm8941_l19: regulator-l19 {  
  			regulator-min-microvolt = <3300000>;  
@@ -423,19 +415,5 @@
 			regulator-max-microvolt = <2850000>;
 			qcom,init-voltage = <2850000>;
 		};
-	};
-};
-&pm8941_chg {
-	status = "ok";
-	qcom,use-only-smbb-boost;
-	qcom,chgr-base = <0x1000>;
-	qcom,usb-chgpth-base = <0x1300>;
-
-	qcom,boost@1500 {
-		status = "ok";
-	};
-
-	qcom,chg-misc@1600 {
-		status = "ok";
 	};
 };

@@ -29,7 +29,6 @@
 #include <linux/of_platform.h>
 #include <linux/of_gpio.h>
 #include <linux/spinlock.h>
-#include <linux/zwait.h>
 
 struct gpio_button_data {
 	const struct gpio_keys_button *button;
@@ -115,15 +114,6 @@ static inline int get_n_events_by_type(int type)
  */
 static void gpio_keys_disable_button(struct gpio_button_data *bdata)
 {
-	if (is_zw_mode()) {
-		/*
-		 * In ZeroWait mode, all gpio_keys's irq are disabled.
-		 * So here, bdata->disabled is set to "true" simply.
-		 */
-		bdata->disabled = true;
-		return;
-	}
-
 	if (!bdata->disabled) {
 		/*
 		 * Disable IRQ and possible debouncing timer.
@@ -148,15 +138,6 @@ static void gpio_keys_disable_button(struct gpio_button_data *bdata)
  */
 static void gpio_keys_enable_button(struct gpio_button_data *bdata)
 {
-	if (is_zw_mode()) {
-		/*
-		 * In ZeroWait mode, all gpio_keys's irq are disabled.
-		 * So here, bdata->disabled is set to "false" simply.
-		 */
-		bdata->disabled = false;
-		return;
-	}
-
 	if (bdata->disabled) {
 		enable_irq(bdata->irq);
 		bdata->disabled = false;
@@ -355,7 +336,7 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 			input_event(input, type, button->code, button->value);
 	} else {
 #if defined CONFIG_MACH_MSM8974_VU3_KR
-		printk("[KEY] Report Key %d, %s\n", button->code, (!!state)?"pressed":"released");
+		printk(KERN_INFO "[KEY] Report Key %d, %s\n", button->code, (!!state) ? "pressed" : "released");
 #endif
 		input_event(input, type, button->code, !!state);
 	}
@@ -667,53 +648,6 @@ static void gpio_remove_key(struct gpio_button_data *bdata)
 		gpio_free(bdata->button->gpio);
 }
 
-#ifdef CONFIG_ZERO_WAIT
-static int zw_gpio_keys_notifier_call(struct notifier_block *nb,
-				unsigned long state, void *ptr)
-{
-	int i;
-	struct gpio_keys_drvdata *ddata =
-			(struct  gpio_keys_drvdata *)nb->ptr;
-
-	switch (state) {
-	case ZW_STATE_OFF:
-		mutex_lock(&ddata->disable_lock);
-		for (i = 0; i < ddata->n_buttons; i++) {
-			struct gpio_button_data *bdata = &ddata->data[i];
-
-			if (!bdata->disabled)
-				enable_irq(bdata->irq);
-		}
-		mutex_unlock(&ddata->disable_lock);
-		break;
-
-	case ZW_STATE_ON_SYSTEM:
-	case ZW_STATE_ON_USER:
-		mutex_lock(&ddata->disable_lock);
-		for (i = 0; i < ddata->n_buttons; i++) {
-			struct gpio_button_data *bdata = &ddata->data[i];
-
-			if (!bdata->disabled) {
-				/*
-				 * Disable IRQ and possible debouncing timer.
-				 */
-				disable_irq(bdata->irq);
-				if (bdata->timer_debounce)
-					del_timer_sync(&bdata->timer);
-			}
-		}
-		mutex_unlock(&ddata->disable_lock);
-		break;
-	}
-
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block zw_gpio_keys_nb = {
-	.notifier_call = zw_gpio_keys_notifier_call,
-};
-#endif /* CONFIG_ZERO_WAIT */
-
 static int __devinit gpio_keys_probe(struct platform_device *pdev)
 {
 	const struct gpio_keys_platform_data *pdata = pdev->dev.platform_data;
@@ -801,10 +735,6 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 
 	device_init_wakeup(&pdev->dev, wakeup);
 
-#ifdef CONFIG_ZERO_WAIT
-	zw_notifier_chain_register(&zw_gpio_keys_nb, ddata);
-#endif
-
 	return 0;
 
  fail3:
@@ -829,10 +759,6 @@ static int __devexit gpio_keys_remove(struct platform_device *pdev)
 	struct gpio_keys_drvdata *ddata = platform_get_drvdata(pdev);
 	struct input_dev *input = ddata->input;
 	int i;
-
-#ifdef CONFIG_ZERO_WAIT
-	zw_notifier_chain_unregister(&zw_gpio_keys_nb);
-#endif
 
 	sysfs_remove_group(&pdev->dev.kobj, &gpio_keys_attr_group);
 

@@ -124,7 +124,6 @@ static int msm_csiphy_lane_config(struct csiphy_device *csiphy_dev,
 		j++;
 		lane_mask >>= 1;
 	}
-	msleep(20);
 	return rc;
 }
 
@@ -164,7 +163,7 @@ static void msm_csiphy_reset(struct csiphy_device *csiphy_dev)
 static int msm_csiphy_subdev_g_chip_ident(struct v4l2_subdev *sd,
 			struct v4l2_dbg_chip_ident *chip)
 {
-	//BUG_ON(!chip);      /* LGE_CHANGE, No more needs to panic, 2013-11-25, jungki.kim@lge.com */
+	//                                                                                            
 	chip->ident = V4L2_IDENT_CSIPHY;
 	chip->revision = 0;
 	return 0;
@@ -178,6 +177,7 @@ static struct msm_cam_clk_info csiphy_8960_clk_info[] = {
 static struct msm_cam_clk_info csiphy_8610_clk_info[] = {
 	{"csiphy_timer_src_clk", 200000000},
 	{"csiphy_timer_clk", -1},
+	{"csi_ahb_clk", -1},
 };
 
 static struct msm_cam_clk_info csiphy_8974_clk_info[] = {

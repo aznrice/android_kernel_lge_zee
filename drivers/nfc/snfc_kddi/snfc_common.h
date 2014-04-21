@@ -42,5 +42,7 @@
 #define SNFC_DEBUG_MSG_MIDDLE(...) ((void)0)
 #endif
 
+extern void snfc_avali_poll_felica_status(void);
+extern int snfc_hvdd_wait_rfs_low(void);
 #endif
 

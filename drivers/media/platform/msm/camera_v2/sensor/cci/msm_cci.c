@@ -29,13 +29,7 @@
 #define CYCLES_PER_MICRO_SEC 4915
 #define CCI_MAX_DELAY 10000
 
-/*LGE_CHANGE S, i2c timeout increase, 2013-05-23, youngbae.choi@lge.com */
-#if 1
-#define CCI_TIMEOUT msecs_to_jiffies(300) //timeout 300ms
-#else /* original */
-#define CCI_TIMEOUT msecs_to_jiffies(100)
-#endif
-/*LGE_CHANGE E, i2c timeout increase, 2013-05-23, youngbae.choi@lge.com */
+#define CCI_TIMEOUT msecs_to_jiffies(300) //                                                                                       
 
 /* TODO move this somewhere else */
 #define MSM_CCI_DRV_NAME "msm_cci"
@@ -106,11 +100,6 @@ static void msm_cci_flush_queue(struct cci_device *cci_dev,
 	msm_camera_io_w(1 << master, cci_dev->base + CCI_HALT_REQ_ADDR);
 	rc = wait_for_completion_interruptible_timeout(
 		&cci_dev->cci_master_info[master].reset_complete, CCI_TIMEOUT);
-#if 0 // Quallcomm Org.
-	if (rc <= 0)
-		pr_err("%s: wait_for_completion_interruptible_timeout %d\n",
-			__func__, __LINE__);
-#else // Quallcomm patch for i2c timeout issue in dual recording, 2013-06-13, jungpyo.hong@lge.com
 	if (rc < 0) {
 		pr_err("%s:%d wait failed\n", __func__, __LINE__);
 	} else if (rc == 0) {
@@ -135,7 +124,6 @@ static void msm_cci_flush_queue(struct cci_device *cci_dev,
 			pr_err("%s:%d wait failed %d\n", __func__, __LINE__,
 				rc);
 	}
-#endif
 	return;
 }
 
@@ -377,8 +365,7 @@ static int32_t msm_cci_i2c_read(struct v4l2_subdev *sd,
 		CDBG("%s failed line %d\n", __func__, __LINE__);
 		goto ERROR;
 	}
-/*LGE_CHANGE S, i2c read bug fix confirmed by QCT, 2013-05-21, sungmin.woo@lge.com */
-#if 0
+
 	if (read_cfg->addr_type == MSM_CAMERA_I2C_BYTE_ADDR)
 		val = CCI_I2C_WRITE_DISABLE_P_CMD | (read_cfg->addr_type << 4) |
 			((read_cfg->addr & 0xFF) << 8);
@@ -386,16 +373,6 @@ static int32_t msm_cci_i2c_read(struct v4l2_subdev *sd,
 		val = CCI_I2C_WRITE_DISABLE_P_CMD | (read_cfg->addr_type << 4) |
 			(((read_cfg->addr & 0xFF00) >> 8) << 8) |
 			((read_cfg->addr & 0xFF) << 16);
-#else
-	if (read_cfg->addr_type == MSM_CAMERA_I2C_BYTE_ADDR)
-		val = CCI_I2C_WRITE_DISABLE_P_CMD | (read_cfg->addr_type << 4) |	//kkh
-			((read_cfg->addr & 0xFF) << 8);
-	if (read_cfg->addr_type == MSM_CAMERA_I2C_WORD_ADDR)
-		val = CCI_I2C_WRITE_DISABLE_P_CMD | (read_cfg->addr_type << 4) |	//kkh
-			(((read_cfg->addr & 0xFF00) >> 8) << 8) |
-			((read_cfg->addr & 0xFF) << 16);
-#endif
-/*LGE_CHANGE E, i2c read bug fix confirmed by QCT, 2013-05-21, sungmin.woo@lge.com */
 	rc = msm_cci_write_i2c_queue(cci_dev, val, master, queue);
 	if (rc < 0) {
 		CDBG("%s failed line %d\n", __func__, __LINE__);
@@ -502,7 +479,8 @@ static int32_t msm_cci_i2c_read_bytes(struct v4l2_subdev *sd,
 		return -EINVAL;
 	}
 
-	if (c_ctrl->cci_info->cci_i2c_master > MASTER_MAX) {
+	if (c_ctrl->cci_info->cci_i2c_master > MASTER_MAX
+			|| c_ctrl->cci_info->cci_i2c_master < 0) {
 		pr_err("%s:%d Invalid I2C master addr\n", __func__, __LINE__);
 		return -EINVAL;
 	}
@@ -547,7 +525,8 @@ static int32_t msm_cci_i2c_write(struct v4l2_subdev *sd,
 	enum cci_i2c_master_t master;
 	enum cci_i2c_queue_t queue = QUEUE_0;
 	cci_dev = v4l2_get_subdevdata(sd);
-	if (c_ctrl->cci_info->cci_i2c_master > MASTER_MAX) {
+	if (c_ctrl->cci_info->cci_i2c_master > MASTER_MAX
+			|| c_ctrl->cci_info->cci_i2c_master < 0) {
 		pr_err("%s:%d Invalid I2C master addr\n", __func__, __LINE__);
 		return -EINVAL;
 	}
@@ -631,7 +610,6 @@ static int32_t msm_cci_i2c_write(struct v4l2_subdev *sd,
 		__func__, __LINE__);
 	rc = wait_for_completion_interruptible_timeout(&cci_dev->
 		cci_master_info[master].reset_complete, CCI_TIMEOUT);
-
 	if (rc <= 0) {
 		pr_err("%s: wait_for_completion_interruptible_timeout %d\n",
 			 __func__, __LINE__);
@@ -653,7 +631,7 @@ ERROR:
 static int msm_cci_subdev_g_chip_ident(struct v4l2_subdev *sd,
 			struct v4l2_dbg_chip_ident *chip)
 {
-	//BUG_ON(!chip);      /* LGE_CHANGE, No more needs to panic, 2013-11-25, jungki.kim@lge.com */
+	//                                                                                            
 	chip->ident = V4L2_IDENT_CCI;
 	chip->revision = 0;
 	return 0;
@@ -666,21 +644,46 @@ static struct msm_cam_clk_info cci_clk_info[] = {
 	{"cci_clk", -1},
 };
 
-static int32_t msm_cci_init(struct v4l2_subdev *sd)
+static int32_t msm_cci_init(struct v4l2_subdev *sd,
+	struct msm_camera_cci_ctrl *c_ctrl)
 {
 	int32_t rc = 0;
 	struct cci_device *cci_dev;
+	enum cci_i2c_master_t master;
 	cci_dev = v4l2_get_subdevdata(sd);
-	CDBG("%s line %d\n", __func__, __LINE__);
 
-	if (!cci_dev) {
-		pr_err("%s cci device NULL\n", __func__);
+	if (!cci_dev || !c_ctrl) {
+		pr_err("%s:%d failed: invalid params %p %p\n", __func__,
+			__LINE__, cci_dev, c_ctrl);
 		rc = -ENOMEM;
 		return rc;
 	}
 
 	if (cci_dev->ref_count++) {
 		CDBG("%s ref_count %d\n", __func__, cci_dev->ref_count);
+		master = c_ctrl->cci_info->cci_i2c_master;
+		CDBG("%s:%d master %d\n", __func__, __LINE__, master);
+		if (master < MASTER_MAX && master >= 0) {
+			mutex_lock(&cci_dev->cci_master_info[master].mutex);
+			/* Set reset pending flag to TRUE */
+			cci_dev->cci_master_info[master].reset_pending = TRUE;
+			/* Set proper mask to RESET CMD address */
+			if (master == MASTER_0)
+				msm_camera_io_w(CCI_M0_RESET_RMSK,
+					cci_dev->base + CCI_RESET_CMD_ADDR);
+			else
+				msm_camera_io_w(CCI_M1_RESET_RMSK,
+					cci_dev->base + CCI_RESET_CMD_ADDR);
+			/* wait for reset done irq */
+			rc = wait_for_completion_interruptible_timeout(
+				&cci_dev->cci_master_info[master].
+				reset_complete,
+				CCI_TIMEOUT);
+			if (rc <= 0)
+				pr_err("%s:%d wait failed %d\n", __func__,
+					__LINE__, rc);
+			mutex_unlock(&cci_dev->cci_master_info[master].mutex);
+		}
 		return 0;
 	}
 
@@ -723,6 +726,7 @@ static int32_t msm_cci_init(struct v4l2_subdev *sd)
 		cci_dev->base + CCI_IRQ_CLEAR_0_ADDR);
 	msm_camera_io_w(0x1, cci_dev->base + CCI_IRQ_GLOBAL_CLEAR_CMD_ADDR);
 	cci_dev->cci_state = CCI_STATE_ENABLED;
+
 	return 0;
 
 reset_complete_failed:
@@ -733,6 +737,7 @@ clk_enable_failed:
 	msm_camera_request_gpio_table(cci_dev->cci_gpio_tbl,
 		cci_dev->cci_gpio_tbl_size, 0);
 request_gpio_failed:
+	cci_dev->ref_count--;
 	return rc;
 }
 
@@ -748,7 +753,7 @@ static int32_t msm_cci_release(struct v4l2_subdev *sd)
 	}
 
 	if (--cci_dev->ref_count) {
-		CDBG("%s ref_count %d\n", __func__, cci_dev->ref_count);
+		CDBG("%s ref_count Exit %d\n", __func__, cci_dev->ref_count);
 		return 0;
 	}
 
@@ -761,6 +766,7 @@ static int32_t msm_cci_release(struct v4l2_subdev *sd)
 		cci_dev->cci_gpio_tbl_size, 0);
 
 	cci_dev->cci_state = CCI_STATE_DISABLED;
+
 	return 0;
 }
 
@@ -768,11 +774,15 @@ static int32_t msm_cci_config(struct v4l2_subdev *sd,
 	struct msm_camera_cci_ctrl *cci_ctrl)
 {
 	int32_t rc = 0;
-	CDBG("%s line %d cmd %d\n", __func__, __LINE__,
-		cci_ctrl->cmd);
+/*                                                                                                       */
+#if 1
+	int32_t trialCnt = 3;
+#endif
+/*                                                                                                       */
+	CDBG("%s line %d cmd %d\n", __func__, __LINE__,cci_ctrl->cmd);
 	switch (cci_ctrl->cmd) {
 	case MSM_CCI_INIT:
-		rc = msm_cci_init(sd);
+		rc = msm_cci_init(sd, cci_ctrl);
 		break;
 	case MSM_CCI_RELEASE:
 		rc = msm_cci_release(sd);
@@ -781,7 +791,19 @@ static int32_t msm_cci_config(struct v4l2_subdev *sd,
 		rc = msm_cci_i2c_read_bytes(sd, cci_ctrl);
 		break;
 	case MSM_CCI_I2C_WRITE:
-		rc = msm_cci_i2c_write(sd, cci_ctrl);
+/*                                                                                                       */
+#if 1 // QCT Test
+	    do{
+			   rc = msm_cci_i2c_write(sd, cci_ctrl);
+			   if(rc < 0)
+    			   pr_err("%s: line %d trialCnt = %d \n", __func__, __LINE__, trialCnt);
+			   trialCnt--;
+		   }while(rc < 0 && trialCnt > 0);
+#else
+        rc = msm_cci_i2c_write(sd, cci_ctrl);
+
+#endif
+/*                                                                                                       */
 		break;
 	case MSM_CCI_GPIO_WRITE:
 		break;
@@ -875,16 +897,7 @@ static long msm_cci_subdev_ioctl(struct v4l2_subdev *sd,
 		rc = msm_cci_config(sd, arg);
 		break;
 	case MSM_SD_SHUTDOWN: {
-/* LGE_CHANGE_S, camera recovery code, 2013-10-24, jungki.kim@lge.com */
-#if 0
 		return rc;
-#else
-		struct msm_camera_cci_ctrl ctrl_cmd;
-		ctrl_cmd.cmd = MSM_CCI_RELEASE;
-		rc = msm_cci_config(sd, &ctrl_cmd);
-		break;
-#endif
-/* LGE_CHANGE_E, camera recovery code, 2013-10-24, jungki.kim@lge.com */
 	}
 	default:
 		rc = -ENOIOCTLCMD;

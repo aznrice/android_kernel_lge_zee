@@ -23,7 +23,7 @@
 #define CDBG(fmt, args...) do { } while (0)
 #endif
 
-#ifdef QULCOMM_ORIGINAL // original (do not use it in LGE)
+#ifdef QULCOMM_ORIGINAL //                                
 int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 	struct camera_vreg_t *cam_vreg, int num_vreg,
 	struct msm_sensor_power_setting **power_setting,
@@ -51,7 +51,7 @@ int32_t msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 	if (count <= 0)
 		return 0;
 
-#ifdef QULCOMM_ORIGINAL // original (do not use it in LGE)
+#ifdef QULCOMM_ORIGINAL //                                
 	ps = kzalloc(sizeof(*ps) * count, GFP_KERNEL);
 #else
 	ps = kzalloc(sizeof(struct msm_sensor_power_setting) * count,
@@ -89,7 +89,7 @@ int32_t msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 			ps[i].seq_type = SENSOR_I2C_MUX;
 			CDBG("%s:%d seq_type[%d] %d\n", __func__, __LINE__,
 				i, ps[i].seq_type);
-#ifdef QULCOMM_ORIGINAL // original (do not use it in LGE)
+#ifdef QULCOMM_ORIGINAL //                                
 		} else {
 			CDBG("%s: unrecognized seq-type\n", __func__);
 			rc = -EILSEQ;
@@ -109,7 +109,7 @@ int32_t msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 			pr_err("%s failed %d\n", __func__, __LINE__);
 			goto ERROR1;
 		}
-#ifdef QULCOMM_ORIGINAL // original (do not use it in LGE)
+#ifdef QULCOMM_ORIGINAL //                                
 		switch (ps[i].seq_type) {
 		case SENSOR_VREG:
 			for (j = 0; j < num_vreg; j++) {
@@ -126,6 +126,16 @@ int32_t msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 				ps[i].seq_val = SENSOR_GPIO_RESET;
 			else if (!strcmp(seq_name, "sensor_gpio_standby"))
 				ps[i].seq_val = SENSOR_GPIO_STANDBY;
+			else if (!strcmp(seq_name, "sensor_gpio_vdig"))
+				ps[i].seq_val = SENSOR_GPIO_VDIG;
+#if defined(CONFIG_MACH_LGE)
+/*           
+                              
+                               
+ */
+			else if (!strcmp(seq_name, "sensor_gpio_vio"))
+				ps[i].seq_val = SENSOR_GPIO_VIO;
+#endif
 			else
 				rc = -EILSEQ;
 			break;
@@ -319,6 +329,46 @@ int32_t msm_camera_init_gpio_pin_tbl(struct device_node *of_node,
 		rc = -ENOMEM;
 		return rc;
 	}
+
+	if (of_property_read_bool(of_node, "qcom,gpio-vdig") == true) {
+		rc = of_property_read_u32(of_node, "qcom,gpio-vdig", &val);
+		if (rc < 0) {
+			pr_err("%s:%d read qcom,gpio-reset failed rc %d\n",
+				__func__, __LINE__, rc);
+			goto ERROR;
+		} else if (val >= gpio_array_size) {
+			pr_err("%s:%d qcom,gpio-reset invalid %d\n",
+				__func__, __LINE__, val);
+			goto ERROR;
+		}
+		gconf->gpio_num_info->gpio_num[SENSOR_GPIO_VDIG] =
+			gpio_array[val];
+		CDBG("%s qcom,gpio-reset %d\n", __func__,
+			gconf->gpio_num_info->gpio_num[SENSOR_GPIO_VDIG]);
+	}
+
+#if defined(CONFIG_MACH_LGE)
+/*           
+                              
+                               
+ */
+	if (of_property_read_bool(of_node, "qcom,gpio-vio") == true) {
+		rc = of_property_read_u32(of_node, "qcom,gpio-vio", &val);
+		if (rc < 0) {
+			pr_err("%s:%d read qcom,gpio-vio failed rc %d\n",
+				__func__, __LINE__, rc);
+			goto ERROR;
+		} else if (val >= gpio_array_size) {
+			pr_err("%s:%d qcom,gpio-vio invalid %d\n",
+				__func__, __LINE__, val);
+			goto ERROR;
+		}
+		gconf->gpio_num_info->gpio_num[SENSOR_GPIO_VIO] =
+			gpio_array[val];
+		CDBG("%s qcom,gpio-vio %d\n", __func__,
+			gconf->gpio_num_info->gpio_num[SENSOR_GPIO_VIO]);
+	}
+#endif
 
 	if (of_property_read_bool(of_node, "qcom,gpio-reset") == true) {
 		rc = of_property_read_u32(of_node, "qcom,gpio-reset", &val);
@@ -685,7 +735,9 @@ int msm_camera_power_down(struct msm_camera_power_ctrl_t *ctrl,
 			}
 			gpio_set_value_cansleep(
 				ctrl->gpio_conf->gpio_num_info->gpio_num
-				[power_setting->seq_val], GPIOF_OUT_INIT_LOW);
+				[power_setting->seq_val],
+				ctrl->gpio_conf->gpio_num_info->gpio_num
+				[power_setting->config_val]);
 			break;
 		case SENSOR_VREG:
 			if (power_setting->seq_val >= CAM_VREG_MAX) {

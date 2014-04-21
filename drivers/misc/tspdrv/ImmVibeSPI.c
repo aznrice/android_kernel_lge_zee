@@ -89,7 +89,7 @@ static void __iomem *virt_bases_v = NULL;
 static int mmss_cc_n_default;
 static int mmss_cc_d_max;
 static int mmss_cc_d_half;
-#if defined(CONFIG_MACH_MSM8974_VU3_KR)||defined(CONFIG_MACH_MSM8974_Z_KR)||defined(CONFIG_MACH_MSM8974_Z_SPR)||defined(CONFIG_MACH_MSM8974_Z_TMO_US)||defined(CONFIG_MACH_MSM8974_Z_ATT_US)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#if defined(CONFIG_MACH_MSM8974_VU3_KR)||defined(CONFIG_MACH_MSM8974_Z_KR)||defined(CONFIG_MACH_MSM8974_Z_SPR)||defined(CONFIG_MACH_MSM8974_Z_TMO_US)||defined(CONFIG_MACH_MSM8974_Z_ATT_US)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)||defined(CONFIG_MACH_MSM8974_Z_CTC_CN)
 int previous_nForce=0;
 #endif
 
@@ -163,6 +163,9 @@ static int vibrator_pwm_set(int enable, int amp, int n_value)
 			(1),		/* UPDATE[0] */
 			MMSS_CC_GP1_CMD_RCGR(0));
 	} else {
+		REG_WRITEL(
+			(0 & 0xffU),	/* D[7:0] */
+			MMSS_CC_GP1_CMD_RCGR(0x10));
 		REG_WRITEL(
 			(0 << 1U) +	/* ROOT_EN[1] */
 			(0),		/* UPDATE[0] */
@@ -252,6 +255,11 @@ static int android_vibrator_probe(struct platform_device *pdev)
 		mmss_cc_d_half = (mmss_cc_n_default >> 1);
 		clk_set_rate(cam_gp1_clk, 22222);
 	}
+#elif defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+	       mmss_cc_n_default = 82;		/* for 230Hz motor */
+		mmss_cc_d_max = mmss_cc_n_default;
+		mmss_cc_d_half = (mmss_cc_n_default >> 1);
+              clk_set_rate(cam_gp1_clk, 29813);
 #elif defined(CONFIG_MACH_MSM8974_G2_VZW) || defined(CONFIG_MACH_MSM8974_G2_ATT) || defined(CONFIG_MACH_MSM8974_G2_TEL_AU)
 	if(lge_get_board_revno() >= HW_REV_D) {
 		mmss_cc_n_default = 92;		/* for 230Hz motor */
@@ -264,7 +272,7 @@ static int android_vibrator_probe(struct platform_device *pdev)
 		mmss_cc_d_half = (mmss_cc_n_default >> 1);
 		clk_set_rate(cam_gp1_clk, 22222);
 	}
-#elif defined(CONFIG_MACH_MSM8974_G2_DCM) || defined(CONFIG_MACH_MSM8974_G2_SPR) || defined(CONFIG_MACH_MSM8974_G2_TMO_US) || defined(CONFIG_MACH_MSM8974_G2_CA) || defined(CONFIG_MACH_MSM8974_G2_OPEN_COM) || defined(CONFIG_MACH_MSM8974_G2_VDF_COM)
+#elif defined(CONFIG_MACH_MSM8974_G2_DCM) || defined(CONFIG_MACH_MSM8974_G2_SPR) || defined(CONFIG_MACH_MSM8974_G2_TMO_US) || defined(CONFIG_MACH_MSM8974_G2_CA) || defined(CONFIG_MACH_MSM8974_G2_OPEN_COM) || defined(CONFIG_MACH_MSM8974_G2_OPT_AU) || defined(CONFIG_MACH_MSM8974_G2_VDF_COM)
 	if(lge_get_board_revno() >= HW_REV_C) {
 		mmss_cc_n_default = 92;		/* for 230Hz motor */
 		mmss_cc_d_max = mmss_cc_n_default;
@@ -281,7 +289,7 @@ static int android_vibrator_probe(struct platform_device *pdev)
 		mmss_cc_d_max = mmss_cc_n_default;
 		mmss_cc_d_half = (mmss_cc_n_default >> 1);
 		clk_set_rate(cam_gp1_clk, 29268);
-#elif defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#elif defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_US)
 	if(lge_get_board_revno() >= HW_REV_B) {
 		mmss_cc_n_default = 82; 	/* for 230Hz motor */
 		mmss_cc_d_max = mmss_cc_n_default;
@@ -293,7 +301,7 @@ static int android_vibrator_probe(struct platform_device *pdev)
 		mmss_cc_d_half = (mmss_cc_n_default >> 1);
 		clk_set_rate(cam_gp1_clk, 22222);
 	}
-#elif defined(CONFIG_MACH_MSM8974_Z_KDDI)
+#elif defined(CONFIG_MACH_MSM8974_Z_KDDI) || defined(CONFIG_MACH_MSM8974_Z_CN)
 	mmss_cc_n_default = 82;     /* for 230Hz motor */
 	mmss_cc_d_max = mmss_cc_n_default;
 	mmss_cc_d_half = (mmss_cc_n_default >> 1);
@@ -440,15 +448,16 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_AmpDisable(VibeUInt8 nActuatorIndex
 
         vibrator_ic_enable_set(0, &vib);
         vibrator_pwm_set(0, 0, GP_CLK_N_DEFAULT);
-        vibrator_power_set(0, &vib);
 
 	if (atomic_read(&vib.gp1_clk_flag) == 1) {
 		clk_disable_unprepare(cam_gp1_clk);
 		atomic_set(&vib.gp1_clk_flag, 0);
 	}
 
+        vibrator_power_set(0, &vib);
+
         g_bAmpEnabled = false;
-#if defined(CONFIG_MACH_MSM8974_VU3_KR)||defined(CONFIG_MACH_MSM8974_Z_KR)||defined(CONFIG_MACH_MSM8974_Z_SPR)||defined(CONFIG_MACH_MSM8974_Z_TMO_US)||defined(CONFIG_MACH_MSM8974_Z_ATT_US)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#if defined(CONFIG_MACH_MSM8974_VU3_KR)||defined(CONFIG_MACH_MSM8974_Z_KR)||defined(CONFIG_MACH_MSM8974_Z_SPR)||defined(CONFIG_MACH_MSM8974_Z_TMO_US)||defined(CONFIG_MACH_MSM8974_Z_ATT_US)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)||defined(CONFIG_MACH_MSM8974_Z_CTC_CN)
 		previous_nForce=0xFFFF;
 #endif
 
@@ -469,17 +478,12 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_AmpEnable(VibeUInt8 nActuatorIndex)
     {
         DbgOut((KERN_DEBUG "ImmVibeSPI_ForceOut_AmpEnable.\n"));
 
-	if (atomic_read(&vib.gp1_clk_flag) == 0) {
-		clk_prepare_enable(cam_gp1_clk);
-		atomic_set(&vib.gp1_clk_flag, 1);
-	}
-
         vibrator_power_set(1, &vib);
+	udelay(100);
         //vibrator_pwm_set(1, 0, GP_CLK_N_DEFAULT);
-        vibrator_ic_enable_set(1, &vib);
 
         g_bAmpEnabled = true;
-#if defined(CONFIG_MACH_MSM8974_VU3_KR)||defined(CONFIG_MACH_MSM8974_Z_KR)||defined(CONFIG_MACH_MSM8974_Z_SPR)||defined(CONFIG_MACH_MSM8974_Z_TMO_US)||defined(CONFIG_MACH_MSM8974_Z_ATT_US)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#if defined(CONFIG_MACH_MSM8974_VU3_KR)||defined(CONFIG_MACH_MSM8974_Z_KR)||defined(CONFIG_MACH_MSM8974_Z_SPR)||defined(CONFIG_MACH_MSM8974_Z_TMO_US)||defined(CONFIG_MACH_MSM8974_Z_ATT_US)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)||defined(CONFIG_MACH_MSM8974_Z_CTC_CN)
 		previous_nForce=0xFFFF;
 #endif
 
@@ -606,7 +610,7 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_SetSamples(VibeUInt8 nActuatorIndex
             /* Unexpected bit depth */
             return VIBE_E_FAIL;
     }
-#if defined(CONFIG_MACH_MSM8974_VU3_KR) || defined(CONFIG_MACH_MSM8974_Z_KR)||defined(CONFIG_MACH_MSM8974_Z_SPR)||defined(CONFIG_MACH_MSM8974_Z_TMO_US)||defined(CONFIG_MACH_MSM8974_Z_ATT_US)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#if defined(CONFIG_MACH_MSM8974_VU3_KR) || defined(CONFIG_MACH_MSM8974_Z_KR)||defined(CONFIG_MACH_MSM8974_Z_SPR)||defined(CONFIG_MACH_MSM8974_Z_TMO_US)||defined(CONFIG_MACH_MSM8974_Z_ATT_US)||defined(CONFIG_MACH_MSM8974_Z_KDDI)||defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)||defined(CONFIG_MACH_MSM8974_Z_CTC_CN)
 	if(nForce==previous_nForce)
 		return VIBE_S_SUCCESS;
 	previous_nForce=nForce;
@@ -621,6 +625,11 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_SetSamples(VibeUInt8 nActuatorIndex
     {
         ImmVibeSPI_ForceOut_AmpEnable(nActuatorIndex);
         vibrator_pwm_set(1, nForce, GP_CLK_N_DEFAULT);
+	if (atomic_read(&vib.gp1_clk_flag) == 0) {
+		clk_prepare_enable(cam_gp1_clk);
+		atomic_set(&vib.gp1_clk_flag, 1);
+	}
+	vibrator_ic_enable_set(1, &vib);
     }
 
     return VIBE_S_SUCCESS;

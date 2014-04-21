@@ -29,7 +29,6 @@
 	serial@f9962000 {
 		status = "ok";
 	};
-	/*  LGE_CHANGE_E, [NFC][wongab.jeon@lge.com], 2013-02-13, NFC Bring up */
 	
 	
 	/*  LGE_CHANGE_S, [NFC][wongab.jeon@lge.com], 2013-02-13, NFC Bring up */
@@ -97,7 +96,7 @@
 		qcom,sup-voltages = <1800 2950>;
 		qcom,bus-width = <4>;
 		qcom,xpc;
-		/* qcom,nonremovable; */
+		qcom,nonremovable;
 		qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50", "SDR104";
 		qcom,current-limit = <800>;
 
@@ -119,6 +118,7 @@
 		status = "ok";
 	};
 
+	/* Below is SDCC2 */
 	sdcc2_rev_b: qcom,sdcc_rev_b@f98a4000 {
 		cell-index = <2>; /* SDC2 WLAN slot */
 		compatible = "qcom,msm-sdcc";
@@ -154,7 +154,7 @@
 		qcom,sup-voltages = <1800 2950>;
 		qcom,bus-width = <4>;
 		qcom,xpc;
-		/* qcom,nonremovable; */
+		qcom,nonremovable;
 		qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50", "SDR104";
 		qcom,current-limit = <800>;
 

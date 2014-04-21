@@ -24,6 +24,9 @@
 #if defined(CONFIG_MACH_LGE)
 #include <mach/board_lge.h>
 #endif
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+#include <linux/string.h>
+#endif
 
 #define LED_BUFF_SIZE 50
 
@@ -42,6 +45,11 @@ extern void make_input_led_pattern(int patterns[],
 extern void set_kpdbl_pattern (int pattern);
 static int onoff_rgb = 0;
 #endif
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+enum WINDOW_COLORS window_color;
+unsigned char win_color[] = "com.lge.systemui.theme.xxxxxx";
+#endif
+
 static void led_update_brightness(struct led_classdev *led_cdev)
 {
 	if (led_cdev->brightness_get)
@@ -286,7 +294,7 @@ static ssize_t set_pattern(struct device *dev, struct device_attribute *attr, co
 
 	if(lge_get_boot_mode() <= LGE_BOOT_MODE_CHARGERLOGO) {
 		printk("[RGB LED] pattern_num=%d\n", pattern_num);
-#if !defined(CONFIG_MACH_MSM8974_Z_KR)&&!defined(CONFIG_MACH_MSM8974_Z_TMO_US)&& !defined(CONFIG_MACH_MSM8974_Z_SPR)&& !defined(CONFIG_MACH_MSM8974_Z_ATT_US) && !defined(CONFIG_MACH_MSM8974_Z_KDDI) && !defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#if !(defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W))
 		if (!pattern_num || pattern_num == 35 || pattern_num == 36 || pattern_num == 1035)
 			set_kpdbl_pattern(pattern_num);
 #endif
@@ -298,6 +306,46 @@ static ssize_t set_pattern(struct device *dev, struct device_attribute *attr, co
 }
 
 static DEVICE_ATTR(setting, 0644, get_pattern, set_pattern);
+
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+static ssize_t get_window_color(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf," - Window Color is '%s' \n", win_color);
+}
+
+static ssize_t set_window_color(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
+{
+	ssize_t ret = -EINVAL;
+	unsigned char color[30];
+
+	if (sscanf(buf, "%29s", color) != 1) {
+		printk("[RGB LED] bad arguments ");
+	}
+	ret = size;
+
+	printk("[RGB LED] # Window Color [%s] # Set Color [%s]\n", color, win_color);
+
+	memcpy(win_color, color, sizeof(color));
+
+	if (strstr(color, "white") != NULL) {
+		window_color = WINDOW_COLOR_WH;
+		printk("[RGB LED] window_color is white\n");
+	} else if (strstr(color, "silver") != NULL) {
+		window_color = WINDOW_COLOR_SV;
+		printk("[RGB LED] window_color is silver\n");
+	} else if (strstr(color, "black") != NULL) {
+		window_color = WINDOW_COLOR_TK;
+		printk("[RGB LED] window_color is black\n");
+	} else {
+		window_color = WINDOW_COLOR_WH;
+		printk("[RGB LED] window_color is default(white)\n");
+	}
+
+	return ret;
+}
+
+static DEVICE_ATTR(window_color, 0644, get_window_color, set_window_color);
+#endif
 
 static ssize_t get_input_pattern(struct device *dev,
 						struct device_attribute *attr,
@@ -449,13 +497,13 @@ static DEVICE_ATTR(onoff_patterns, 0644, confirm_onoff_pattern, make_onoff_patte
 
 int led_pattern_sysfs_register(void)
 {
-	struct class *g2_rgb;
+	struct class *lg_rgb;
 	struct device *pattern_sysfs_dev;
-	g2_rgb = class_create(THIS_MODULE, "g2_rgb_led");
-	if (IS_ERR(g2_rgb)) {
-		printk("Failed to create class(g2_rgb_led)!\n");
+	lg_rgb = class_create(THIS_MODULE, "lg_rgb_led");
+	if (IS_ERR(lg_rgb)) {
+		printk("Failed to create class(lg_rgb_led)!\n");
 	}
-	pattern_sysfs_dev = device_create(g2_rgb, NULL, 0, NULL, "use_patterns");
+	pattern_sysfs_dev = device_create(lg_rgb, NULL, 0, NULL, "use_patterns");
 	if (IS_ERR(pattern_sysfs_dev))
 		return PTR_ERR(pattern_sysfs_dev);
 
@@ -470,6 +518,11 @@ int led_pattern_sysfs_register(void)
 
 	if (device_create_file(pattern_sysfs_dev, &dev_attr_onoff_patterns) < 0)
 		printk("Failed to create device file(%s)!\n", dev_attr_onoff_patterns.attr.name);
+
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+	if (device_create_file(pattern_sysfs_dev, &dev_attr_window_color) < 0)
+		printk("Failed to create device file(%s)!\n", dev_attr_window_color.attr.name);
+#endif
 
 	return 0;
 }

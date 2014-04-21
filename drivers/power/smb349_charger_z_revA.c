@@ -247,7 +247,7 @@ static int wireless_charging;
 #endif
 
 #ifdef CONFIG_MAX17050_FUELGAUGE
-/*junnyoung.jang@lge.com 20130326 Add battery condition */
+/*                                                      */
 static int g_batt_soc;
 static int g_batt_vol;
 static int g_batt_age;
@@ -440,7 +440,7 @@ static int smb349_get_usbin_adc(void)
        int rc = 0;
 
        if (qpnp_vadc_is_ready() == 0) {
-               rc = qpnp_vadc_read(USBIN, &results);
+               rc = qpnp_vadc_read_lge(USBIN, &results);
                if (rc) {
                        pr_err("Unable to read usbin adc rc=%d\n", rc);
                        return -100;
@@ -589,7 +589,7 @@ static int get_prop_batt_voltage_now_bms(void)
 	int rc = 0;
 	struct qpnp_vadc_result results;
 
-	rc = qpnp_vadc_read(VBAT_SNS, &results);
+	rc = qpnp_vadc_read_lge(VBAT_SNS, &results);
 	if (rc) {
 		pr_err("Unable to read vbat rc=%d\n", rc);
 		return 0;
@@ -627,7 +627,7 @@ static int get_prop_batt_voltage_now_max17048(void)
 }
 
 #ifdef CONFIG_MAX17050_FUELGAUGE
-/*junnyoung.jang@lge.com 20130326 Add battery condition */
+/*                                                      */
 void lge_pm_battery_age_update(void)
 {
 	if (pseudo_batt_age_mode)
@@ -715,7 +715,7 @@ static int smb349_get_prop_batt_temp(struct smb349_struct *smb349_chg)
 		return DEFAULT_TEMP;
 	}
 
-	rc = qpnp_vadc_read(LR_MUX1_BATT_THERM, &results);
+	rc = qpnp_vadc_read_lge(LR_MUX1_BATT_THERM, &results);
 	if (rc) {
 		pr_debug("Unable to read batt temperature rc=%d\n", rc);
 		pr_debug("Report last_bat_temp %d again\n", batt_temp_old);
@@ -745,7 +745,7 @@ static int smb349_get_prop_batt_health(struct smb349_struct *smb349_chg)
 	int batt_temp;
 	batt_temp = smb349_get_prop_batt_temp(smb349_chg);
 
-	/* TODO : implements LGE charing scenario */
+	/*                                        */
 	if (batt_temp >= 550)
 		return POWER_SUPPLY_HEALTH_OVERHEAT;
 	if (batt_temp <= -100)
@@ -826,7 +826,7 @@ static int smb349_get_prop_batt_current_now(struct smb349_struct *smb349_chg)
 	 * will be report default value when vadc is not ready state.
 	 */
 	if (qpnp_vadc_is_ready() == 0) {
-		rc = qpnp_vadc_read(LR_MUX4_AMUX_THM1, &results);
+		rc = qpnp_vadc_read_lge(LR_MUX4_AMUX_THM1, &results);
 		if (rc) {
 			pr_err("Unable to read amux_thm1 rc=%d\n", rc);
 			pr_err("Report last_bat_current %d again\n",batt_current_old);
@@ -1709,7 +1709,7 @@ static enum power_supply_property smb349_batt_power_props[] = {
 	POWER_SUPPLY_PROP_PSEUDO_BATT,
 	POWER_SUPPLY_PROP_EXT_PWR_CHECK,
 #ifdef CONFIG_MAX17050_FUELGAUGE
-/*junnyoung.jang@lge.com 20130326 Add battery condition */
+/*                                                      */
 	POWER_SUPPLY_PROP_BATTERY_CONDITION,
 	POWER_SUPPLY_PROP_BATTERY_AGE,
 #endif
@@ -2599,11 +2599,11 @@ static int smb349_batt_power_get_property(struct power_supply *psy,
 #endif
 		break;
 	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
-		/* it makes ibat max set following themral mitigation.
-		 * But, SMB349 cannot control ibat current like PMIC.
-		 * if LGE charging scenario make charging thermal control,
-		 * it is good interface to use LG mitigation level.
-		 */
+		/*                                                    
+                                                       
+                                                            
+                                                     
+   */
 		val->intval = 0;
 		break;
 	case POWER_SUPPLY_PROP_PSEUDO_BATT:
@@ -2613,7 +2613,7 @@ static int smb349_batt_power_get_property(struct power_supply *psy,
 		val->intval = lge_pm_get_cable_type();
 		break;
 #ifdef CONFIG_MAX17050_FUELGAUGE
-/*junnyoung.jang@lge.com 20130326 Add battery condition */
+/*                                                      */
 	case POWER_SUPPLY_PROP_BATTERY_CONDITION:
 		val->intval = lge_pm_get_battery_condition();
 		break;
@@ -2684,11 +2684,11 @@ static int smb349_batt_power_set_property(struct power_supply *psy,
 		smb349_enable_charging(smb349_chg, val->intval);
 		break;
 	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
-		/* it makes ibat max set following themral mitigation.
-		 * But, SMB349 cannot control ibat current like PMIC.
-		 * if LGE charging scenario make charging thermal control,
-		 * it is good interface to use LG mitigation level.
-		 */
+		/*                                                    
+                                                       
+                                                            
+                                                     
+   */
 		break;
 	default:
 		return -EINVAL;

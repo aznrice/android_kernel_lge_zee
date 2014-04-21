@@ -169,9 +169,6 @@ static inline int init_info_for_card(struct snd_card *card)
 	err = snd_info_register(entry_state);
 	if (err < 0) {
 		snd_printd("unable to register card entry state\n");
-//[LGE_AUDIO_BSP_S] taeho.youn@lge.com 		for WBT
-		snd_info_free_entry(entry_state);
-//[LGE_AUDIO_BSP_E]
 		card->proc_id = NULL;
 		return err;
 	}

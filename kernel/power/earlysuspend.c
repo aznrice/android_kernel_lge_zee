@@ -170,6 +170,7 @@ static void early_suspend(struct work_struct *work)
 			printk(KERN_INFO"%s: %s\n", __func__, sym);
 			early_suspend_call_chain(pos);
 #else
+
 			if (debug_mask & DEBUG_VERBOSE)
 				pr_info("early_suspend: calling %pf\n", pos->suspend);
 			pos->suspend(pos);
@@ -184,17 +185,18 @@ static void early_suspend(struct work_struct *work)
 	save_earlysuspend_step(EARLYSUSPEND_CHAINDONE);
 #endif
 	mutex_unlock(&early_suspend_lock);
+
 #ifdef CONFIG_MACH_LGE
 	save_earlysuspend_step(EARLYSUSPEND_MUTEXUNLOCK);
 #endif
 
-#ifdef CONFIG_MACH_LGE
-	save_earlysuspend_step(EARLYSUSPEND_SYNCDONE);
-#endif
 	if (debug_mask & DEBUG_SUSPEND)
 		pr_info("early_suspend: sync\n");
 
 	sys_sync();
+#ifdef CONFIG_MACH_LGE
+	save_earlysuspend_step(EARLYSUSPEND_SYNCDONE);
+#endif
 abort:
 	spin_lock_irqsave(&state_lock, irqflags);
 	if (state == SUSPEND_REQUESTED_AND_SUSPENDED)

@@ -56,12 +56,29 @@ int32_t RegWriteA(uint16_t RegAddr, uint8_t RegData)
 	return ret;	
 }
 
+int32_t RegWriteB(uint16_t RegAddr, uint16_t RegData)
+{	
+	int32_t ret = 0;
+	uint16_t data = (uint16_t)RegData;
+	ret = ois_i2c_write(RegAddr, data, 2);
+	return ret;	
+}
+
 int32_t RegReadA(uint16_t RegAddr, uint8_t *RegData)
 {
 	int32_t ret = 0;
 	uint16_t data = 0;
 	ret = ois_i2c_read(RegAddr, &data, 1);
 	*RegData = (uint8_t)data;
+	return ret;
+}
+
+int32_t RegReadB(uint16_t RegAddr, uint16_t *RegData)
+{
+	int32_t ret = 0;
+	uint16_t data = 0;
+	ret = ois_i2c_read(RegAddr, &data, 2);
+	*RegData = data;
 	return ret;
 }
 

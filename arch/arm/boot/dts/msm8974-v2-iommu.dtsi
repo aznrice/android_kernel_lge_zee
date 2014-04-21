@@ -116,7 +116,6 @@
 				0x2010
 				0x2014>;
 
-
 	qcom,iommu-bfb-data =  <0xffff
 				0x0
 				0x4

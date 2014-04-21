@@ -110,6 +110,7 @@ static int lge_gdsc_disable(struct gdsc *sc)
 
 	ret = readl_tight_poll_timeout(sc->gdscr, regval,
 				       !(regval & PWR_ON_MASK), TIMEOUT_US_LGE);
+
 	if (ret)
 		pr_err("%s: %s disable timed out\n", __func__, sc->rdesc.name);
 	return ret;
@@ -246,7 +247,7 @@ static int gdsc_disable(struct regulator_dev *rdev)
 	uint32_t regval;
 	int i, ret = 0;
 
-	for (i = 0; i < sc->clock_count; i++) {
+	for (i = sc->clock_count-1; i >= 0; i--) {
 		if (sc->toggle_mem)
 			clk_set_flags(sc->clocks[i], CLKFLAG_NORETAIN_MEM);
 		if (sc->toggle_periph)
@@ -272,7 +273,7 @@ static int gdsc_disable(struct regulator_dev *rdev)
 					sc->rdesc.name);
 		}
 	} else {
-		for (i = 0; i < sc->clock_count; i++)
+		for (i = sc->clock_count-1; i >= 0; i--)
 			clk_reset(sc->clocks[i], CLK_RESET_ASSERT);
 		sc->resets_asserted = true;
 	}
@@ -352,7 +353,8 @@ static int __devinit gdsc_probe(struct platform_device *pdev)
 #ifdef CONFIG_MACH_LGE
 	of_property_read_u32(pdev->dev.of_node, "lge,use_workaround",
 			&use_lge_workaround);
-	sc->use_lge_workaround = !(!use_lge_workaround);
+	sc->use_lge_workaround =
+		lge_get_board_revno() >= use_lge_workaround ? 0 : 1;
 #endif
 	sc->rdesc.id = atomic_inc_return(&gdsc_count);
 	sc->rdesc.ops = &gdsc_ops;
@@ -382,7 +384,7 @@ static int __devinit gdsc_probe(struct platform_device *pdev)
 						"qcom,skip-logic-collapse");
 	if (!sc->toggle_logic) {
 #ifdef CONFIG_MACH_LGE
-		/* LGE workaround is not used if a device is good pdn revision */
+		/*                                                             */
 		if (lge_get_board_revno() >= use_lge_workaround) {
 			regval &= ~SW_COLLAPSE_MASK;
 			writel_relaxed(regval, sc->gdscr);

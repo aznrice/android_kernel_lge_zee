@@ -38,12 +38,26 @@
 #include <linux/reboot.h>
 #include <linux/switch.h>
 #include <linux/qpnp-misc.h>
+
+#ifdef CONFIG_WIRELESS_CHARGER
+#ifdef CONFIG_BQ51053B_CHARGER
+#include <linux/power/bq51053b_charger.h>
+#endif
+#endif
 #ifdef CONFIG_LGE_CHARGER_TEMP_SCENARIO
 #include <mach/lge_charging_scenario.h>
 #define MONITOR_BATTEMP_POLLING_PERIOD          (60*HZ)
 #endif
 
+#ifdef CONFIG_LGE_PM
+#include <linux/qpnp/qpnp-temp-alarm.h>
+#endif
+#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+#include <linux/power/lge_battery_id.h>
+#endif
+#ifdef CONFIG_ZERO_WAIT
 #include <linux/zwait.h>
+#endif
 
 #ifndef BIT
 #define BIT(x)	(1 << (x))
@@ -110,6 +124,7 @@
 #define PG_STAT_MASK		BIT(2)
 #define THERM_STAT_MASK 	BIT(1)
 #define VSYS_STAT_MASK 		BIT(0)
+#define NOT_CHRG_STAT		0x00
 
 /* BQ09 FAULT_REG Mask */
 #define CHRG_FAULT_MASK 	(BIT(5)|BIT(4))
@@ -117,6 +132,11 @@
 #define LT_CABLE_56K		6
 #define LT_CABLE_130K		7
 #define LT_CABLE_910K		11
+
+#define I2C_SUSPEND_WORKAROUND
+#ifdef I2C_SUSPEND_WORKAROUND
+extern bool i2c_suspended;
+#endif
 
 enum bq24192_chg_status {
 	BQ_CHG_STATUS_NONE 		= 0,
@@ -146,8 +166,14 @@ struct bq24192_chip {
 	int sys_vmin_mv;
 	int vin_limit_mv;
 	int int_gpio;
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+	int ext_chg_en;
+	int otg_en;
+#endif
 	int irq;
-
+#if defined(CONFIG_BQ51053B_CHARGER) && defined(CONFIG_WIRELESS_CHARGER)
+	int wlc_present;
+#endif
 	int usb_present;
 	int usb_online;
 	int ac_present;
@@ -189,12 +215,25 @@ struct bq24192_chip {
 	int  set_chg_current_ma;
 	struct wake_lock battgone_wake_lock;
 	struct wake_lock chg_timeout_lock;
+
+#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+	int batt_id_smem;
+#endif
+
+#ifdef I2C_SUSPEND_WORKAROUND
+	struct delayed_work check_suspended_work;
+	int suspended;
+#endif
 };
 
 
 #ifdef CONFIG_SENSORS_QPNP_ADC_VOLTAGE
 int last_batt_temp;
 int last_batt_current;
+#endif
+
+#ifdef CONFIG_WIRELESS_CHARGER
+static int wireless_charging;
 #endif
 
 static struct bq24192_chip *the_chip;
@@ -359,7 +398,9 @@ static struct input_ma_limit_entry icl_ma_table[] = {
 
 #define INPUT_CURRENT_LIMIT_MIN_MA  100
 #define INPUT_CURRENT_LIMIT_MAX_MA  3000
-#ifdef CONFIG_MACH_MSM8974_Z_US
+#if defined(CONFIG_MACH_MSM8974_Z_US) && !defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#define INPUT_CURRENT_LIMIT_TA 1500
+#elif defined(CONFIG_MACH_MSM8974_Z_CN)
 #define INPUT_CURRENT_LIMIT_TA 1500
 #else
 #define INPUT_CURRENT_LIMIT_TA 2000
@@ -646,26 +687,40 @@ static int bq24192_set_vclamp_mv(struct bq24192_chip *chip, int mv)
 static int bq24192_get_usbin_adc(void)
 {
 #ifdef CONFIG_SENSORS_QPNP_ADC_VOLTAGE
-       struct qpnp_vadc_result results;
-       int rc = 0;
 
-       if (qpnp_vadc_is_ready() == 0) {
-               rc = qpnp_vadc_read(USBIN, &results);
-               if (rc) {
-                       pr_err("Unable to read usbin adc rc=%d\n", rc);
-                       return NOT_INIT_VBUS_UV;
-               }
-               else {
-                       pr_debug("DC_IN voltage: %lld\n", results.physical);
-                       return results.physical;
-               }
-       } else {
-               pr_err("vadc is not ready yet.\n");
-               return NOT_INIT_VBUS_UV;
-       }
+/* LIMIT: Include ONLY A1, B1, Vu3, Z models used MSM8974 AA/AB */
+#ifdef CONFIG_ADC_READY_CHECK_JB
+	struct qpnp_vadc_result results;
+	int rc = 0;
+
+	if (qpnp_vadc_is_ready() == 0) {
+		rc = qpnp_vadc_read_lge(USBIN, &results);
+		if (rc) {
+			pr_err("Unable to read usbin adc rc=%d\n", rc);
+			return NOT_INIT_VBUS_UV;
+		}
+		else {
+			pr_debug("DC_IN voltage: %lld\n", results.physical);
+			return results.physical;
+		}
+	} else {
+		pr_err("vadc is not ready yet.\n");
+		return NOT_INIT_VBUS_UV;
+	}
 #else
-       pr_err("CONFIG_SENSORS_QPNP_ADC_VOLTAGE is not defined.\n");
-       return NOT_INIT_VBUS_UV;
+	/* MUST BE IMPLEMENT :
+	 * After MSM8974 AC and later version(PMIC combination change),
+	 * ADC AMUX of PMICs are separated in each dual PMIC.
+	 *
+	 * Ref.
+	 * qpnp-adc-voltage.c : *qpnp_get_vadc(), qpnp_vadc_read().
+	 * qpnp-charger.c     : new implementation by QCT.
+	 */
+	return NOT_INIT_VBUS_UV;
+#endif
+#else
+	pr_err("CONFIG_SENSORS_QPNP_ADC_VOLTAGE is not defined.\n");
+	return NOT_INIT_VBUS_UV;
 #endif
 }
 
@@ -775,6 +830,7 @@ int32_t external_bq24192_enable_charging(bool enable)
 
 static int bq24192_get_prop_batt_present(struct bq24192_chip *chip)
 {
+	int temp = 0;
 	bool batt_present;
 
 #if 0//def CONFIG_QPNP_MISC
@@ -784,7 +840,6 @@ static int bq24192_get_prop_batt_present(struct bq24192_chip *chip)
 		batt_present = 1;
 #else
 	// Must be verified!
-	int temp = 0;
 	temp = bq24192_get_batt_temp_origin();
 
 	if(temp <= -300 || temp >= 790) {
@@ -821,7 +876,7 @@ static void bq24192_chg_timeout(bool chg_en)
 		MONITOR_BATTEMP_POLLING_PERIOD);
 }
 
-#ifdef CONFIG_MACH_MSM8974_Z_US
+#if defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_CN)
 static int in_chargerlogo;
 #define TERM_CURRENT_IN_PWRON_CHG	128
 #define TERM_CURRENT_IN_PWROFF_CHG	128
@@ -835,9 +890,12 @@ struct current_limit_entry {
 };
 
 static struct current_limit_entry adap_tbl[] = {
-#ifdef CONFIG_MACH_MSM8974_Z_US
+#if defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_CN)
 	{1200, 1024},
 	{1500, 1408},
+#elif defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+	{1200, 1024},
+	{2000, 1400},
 #else
 	{1200, 1024},
 	{2000, 1600},
@@ -857,7 +915,7 @@ bq24192_set_bootcompleted(const char *val, struct kernel_param *kp)
 	}
 	pr_info(" %d\n",bootcompleted);
 
-#ifdef CONFIG_MACH_MSM8974_Z_US
+#if defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_CN)
 	if (in_chargerlogo)
 	{
 		in_chargerlogo = 0 ;
@@ -878,6 +936,41 @@ bq24192_set_bootcompleted(const char *val, struct kernel_param *kp)
 }
 module_param_call(bootcompleted, bq24192_set_bootcompleted,
 	param_get_uint, &bootcompleted, 0644);
+
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+static void bq24192_batt_remove_insert_cb(int batt_present)
+{
+	int batt_temp = 0;
+	int usb_present = 0;
+	bool ftm_cable = false;
+
+	wake_lock(&the_chip->battgone_wake_lock);
+
+	batt_present = bq24192_get_prop_batt_present(the_chip);
+	batt_temp = bq24192_get_batt_temp_origin()/10;
+	usb_present = bq24192_is_charger_present(the_chip);
+	ftm_cable = is_factory_cable();
+
+	printk(KERN_ERR "[PM] batt_present=%d, batt_temp=%d, usb_present=%d, ftm_cable=%d\n", batt_present, batt_temp, usb_present, ftm_cable);
+
+	if ( ( batt_present == 0 ) && ( batt_temp <= -30 || batt_temp >= 79 ) && ( ftm_cable == 0 ) && ( usb_present == 1 ) )
+	{
+		printk(KERN_ERR "[PM] Now reset as scenario!\n");
+
+		bq24192_enable_charging(the_chip, 0);
+		switch_set_state(&the_chip->batt_removed, 1);
+		power_supply_changed(&the_chip->batt_psy);
+
+		msleep(5000);
+
+		kernel_restart("oem-11");
+		wake_unlock(&the_chip->battgone_wake_lock);
+	} else {
+		printk(KERN_ERR "[PM] Do not power off.\n");
+		wake_unlock(&the_chip->battgone_wake_lock);
+	}
+}
+#endif
 
 static void bq24192_input_limit_worker(struct work_struct *work)
 {
@@ -940,13 +1033,18 @@ static void bq24192_input_limit_exception_worker(struct work_struct *work)
 		power_supply_changed(chip->usb_psy);
 	}
 }
-
+#if defined(CONFIG_TOUCHSCREEN_ATMEL_S540)
+extern void trigger_early_baseline_state_machine(int plug_in);
+#endif
 static void bq24192_irq_worker(struct work_struct *work)
 {
 	struct bq24192_chip *chip =
 		container_of(work, struct bq24192_chip, irq_work.work);
 	u8 reg08, reg09;
 	int ret = 0, usb_present = 0;
+#if defined(CONFIG_BQ51053B_CHARGER) && defined(CONFIG_WIRELESS_CHARGER)
+	int wlc_present =0;
+#endif
 
 	ret = bq24192_read_reg(chip->client, BQ08_SYSTEM_STATUS_REG, &reg08);
 	if (ret)
@@ -954,6 +1052,9 @@ static void bq24192_irq_worker(struct work_struct *work)
 	ret = bq24192_read_reg(chip->client, BQ09_FAULT_REG, &reg09);
 	if (ret)
 		return;
+#if defined(CONFIG_TOUCHSCREEN_ATMEL_S540)
+	trigger_early_baseline_state_machine(1);
+#endif
 
 	pr_info("08:0x%02X, 09:0x%02X\n",reg08, reg09);
 	if ((reg08 & VBUS_STAT_MASK) == VBUS_STAT_MASK)
@@ -990,6 +1091,7 @@ static void bq24192_irq_worker(struct work_struct *work)
 	if (reg09 & BIT(3))
 		pr_info("battery ovp!\n");
 
+#if !(defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W))
 	if (!bq24192_get_prop_batt_present(chip)) {
 		bool charger = false;
 		bool ftm_cable = is_factory_cable();
@@ -1005,11 +1107,19 @@ static void bq24192_irq_worker(struct work_struct *work)
 			power_supply_changed(&chip->batt_psy);
 		}
 	}
+#endif
 
 	usb_present = bq24192_is_charger_present(chip);
+#if defined(CONFIG_BQ51053B_CHARGER) && defined(CONFIG_WIRELESS_CHARGER)
+	wlc_present = wireless_charging || is_wireless_charger_plugged();
+	if ((chip->usb_present ^ usb_present) || (chip->wlc_present ^ wlc_present)){
+		chip->wlc_present = wlc_present;
+#else
 	if (chip->usb_present ^ usb_present) {
+#endif
+#ifdef CONFIG_ZERO_WAIT
 		zw_psy_irq_handler(usb_present);
-
+#endif
 #ifdef CONFIG_LGE_CHARGER_TEMP_SCENARIO
 		cancel_delayed_work_sync(&chip->battemp_work);
 		schedule_delayed_work(&chip->battemp_work, HZ*2);
@@ -1030,7 +1140,16 @@ static void bq24192_irq_worker(struct work_struct *work)
 				msecs_to_jiffies(1500));
 		}
 		else {
+#if defined(CONFIG_BQ51053B_CHARGER) && defined(CONFIG_WIRELESS_CHARGER)
+			if(wlc_present){
+		  		pr_err("[WLC] set usb_present to 0 \n");
+		  		chip->usb_present = 0;
+			} else {
+				chip->usb_present = usb_present;
+			}
+#else
 			chip->usb_present = usb_present;
+#endif
 			pr_info("notify vbus to usb_present=%d\n", usb_present);
 			power_supply_set_present(chip->usb_psy, chip->usb_present);
 		}
@@ -1043,10 +1162,32 @@ static irqreturn_t bq24192_irq(int irq, void *dev_id)
 {
 	struct bq24192_chip *chip = dev_id;
 
+#ifdef I2C_SUSPEND_WORKAROUND
+	schedule_delayed_work(&chip->check_suspended_work, msecs_to_jiffies(100));
+#else
 	schedule_delayed_work(&chip->irq_work, msecs_to_jiffies(100));
+#endif
 
 	return IRQ_HANDLED;
 }
+
+#ifdef I2C_SUSPEND_WORKAROUND
+static void bq24192_check_suspended_worker(struct work_struct *work)
+{
+	struct bq24192_chip *chip = container_of(work, struct bq24192_chip, check_suspended_work.work);
+
+	if (chip->suspended || i2c_suspended)
+	{
+		printk("bq24192 suspended. try i2c operation after 100ms.\n");
+		schedule_delayed_work(&chip->check_suspended_work, msecs_to_jiffies(100));
+	}
+	else
+	{
+		pr_debug("bq24192 resumed. chip->suspended:%d, i2c_suspended:%d\n", chip->suspended, i2c_suspended ? 1 : 0);
+		schedule_delayed_work(&chip->irq_work, 0);
+	}
+}
+#endif
 
 static int set_reg(void *data, u64 val)
 {
@@ -1090,6 +1231,11 @@ static int bq24192_enable_otg(struct bq24192_chip *chip, bool enable)
 		pr_err("failed to set OTG_ENABLE_MASK rc=%d\n", ret);
 		return ret;
 	}
+
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+	if (chip->otg_en)
+		gpio_set_value(chip->otg_en, enable);
+#endif
 
 	return 0;
 }
@@ -1161,6 +1307,9 @@ static enum power_supply_property bq24192_batt_power_props[] = {
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_PSEUDO_BATT,
 	POWER_SUPPLY_PROP_EXT_PWR_CHECK,
+#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+	POWER_SUPPLY_PROP_BATTERY_ID_CHECKER,
+#endif
 };
 
 
@@ -1201,6 +1350,10 @@ static int bq24192_get_prop_charge_type(struct bq24192_chip *chip)
 		if (status == BQ_CHG_STATUS_NONE
 			|| status == BQ_CHG_STATUS_FULL) {
 			pr_debug("Charging stopped.\n");
+#ifdef CONFIG_BQ51053B_CHARGER
+			if(chip->wlc_present && ((sys_status & CHRG_STAT_MASK) == CHRG_STAT_MASK))
+				wireless_charging_completed();
+#endif
 			wake_unlock(&chip->chg_wake_lock);
 		} else {
 			pr_debug("Charging started.\n");
@@ -1260,11 +1413,14 @@ static int bq24192_get_prop_batt_voltage_now(void)
 int bq24192_get_batt_temp_origin(void)
 {
 #ifdef CONFIG_SENSORS_QPNP_ADC_VOLTAGE
+
+/* LIMIT: Include ONLY A1, B1, Vu3, Z models used MSM8974 AA/AB */
+#ifdef CONFIG_ADC_READY_CHECK_JB
 	int rc = 0;
 	struct qpnp_vadc_result results;
 
 	if (qpnp_vadc_is_ready() == 0) {
-		rc = qpnp_vadc_read(LR_MUX1_BATT_THERM, &results);
+		rc = qpnp_vadc_read_lge(LR_MUX1_BATT_THERM, &results);
 		if (rc) {
 			pr_debug("Unable to read batt temperature rc=%d\n", rc);
 			pr_debug("Report last_bat_temp %d again\n", last_batt_temp);
@@ -1278,6 +1434,17 @@ int bq24192_get_batt_temp_origin(void)
 		pr_err("vadc is not ready yet. report default temperature\n");
 		return DEFAULT_TEMP;
 	}
+#else
+	/* MUST BE IMPLEMENT :
+	 * After MSM8974 AC and later version(PMIC combination change),
+	 * ADC AMUX of PMICs are separated in each dual PMIC.
+	 *
+	 * Ref.
+	 * qpnp-adc-voltage.c : *qpnp_get_vadc(), qpnp_vadc_read().
+	 * qpnp-charger.c     : new implementation by QCT.
+	 */
+	return DEFAULT_TEMP;
+#endif
 #else
 	pr_err("CONFIG_SENSORS_QPNP_ADC_VOLTAGE is not defined.\n");
 	return DEFAULT_TEMP;
@@ -1323,7 +1490,9 @@ static int bq24192_get_prop_batt_current_now(struct bq24192_chip *chip)
 #ifdef CONFIG_LGE_CURRENTNOW
 	int batt_current = 0;
 	union power_supply_propval ret = {0,};
-
+#ifdef CONFIG_MACH_MSM8974_Z_OPEN_COM
+	union power_supply_propval rew = {1,};
+#endif
 	if (!bq24192_get_prop_batt_present(chip))
 		return DEFAULT_CURRENT;
 
@@ -1331,6 +1500,10 @@ static int bq24192_get_prop_batt_current_now(struct bq24192_chip *chip)
 	if (!chip->cn_psy) {		
 		return DEFAULT_CURRENT;
 	} else {
+#ifdef CONFIG_MACH_MSM8974_Z_OPEN_COM
+		chip->cn_psy->set_property(chip->cn_psy,
+			POWER_SUPPLY_PROP_VIRT_ENABLE_BMS, &rew);
+#endif
 		chip->cn_psy->get_property(chip->cn_psy,
 			POWER_SUPPLY_PROP_VIRT_ENABLE_BMS, &ret);
 		if(!ret.intval)
@@ -1341,9 +1514,52 @@ static int bq24192_get_prop_batt_current_now(struct bq24192_chip *chip)
 		last_batt_current = batt_current;
 		return batt_current;
 	}
-#else
+#elif defined(CONFIG_SENSORS_QPNP_ADC_CURRENT)
+#ifdef CONFIG_ADC_READY_CHECK_JB
+	struct qpnp_iadc_result result;
+	int batt_current = 0;
+	int ret;
+	u8 sys_status;
+
+#if	defined (CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_KDDI) || defined(CONFIG_MACH_MSM8974_Z_CN)
 	return DEFAULT_CURRENT;
 #endif
+	if (!bq24192_get_prop_batt_present(chip))
+		return DEFAULT_CURRENT;
+
+	ret = bq24192_read_reg(chip->client, BQ08_SYSTEM_STATUS_REG, &sys_status);
+	if (ret)
+		return DEFAULT_CURRENT;
+
+	if ((sys_status & CHRG_STAT_MASK) == NOT_CHRG_STAT) {
+		pr_info("not charging!\n");
+		return DEFAULT_CURRENT;
+	} else if ((sys_status & CHRG_STAT_MASK) == CHRG_STAT_MASK) {	
+		pr_info("charging done!\n");
+		return last_batt_current;
+	}
+
+	if (qpnp_iadc_is_ready()) {
+		pr_err("qpnp_iadc is not ready!\n");
+		return DEFAULT_CURRENT;
+	}
+
+	ret = qpnp_iadc_read_lge(EXTERNAL_RSENSE, &result);
+	if (ret) {
+		pr_err("failed to read qpnp_iadc\n");
+		return DEFAULT_CURRENT;
+	}
+
+	batt_current = result.result_ua;
+	last_batt_current = batt_current;
+	pr_info("battery_current= %d\n", batt_current);
+	return batt_current;
+#else /* CONFIG_ADC_READY_CHECK_JB */
+	return DEFAULT_CURRENT;
+#endif /* CONFIG_ADC_READY_CHECK_JB */
+#else /*                       */
+	return DEFAULT_CURRENT;
+#endif /*                       */
 }
 
 #define DEFAULT_FULL_DESIGN	2500
@@ -1364,15 +1580,24 @@ static int bq24192_get_prop_batt_status(struct bq24192_chip *chip)
 	int capacity = bq24192_get_prop_batt_capacity(chip);
 
 #ifdef CONFIG_LGE_CHARGER_TEMP_SCENARIO
+#if defined(CONFIG_BQ51053B_CHARGER) && defined(CONFIG_WIRELESS_CHARGER)
+	if (((chip->usb_present) || (chip->wlc_present)) && (chip->pseudo_ui_chg))
+		return POWER_SUPPLY_STATUS_CHARGING;
+#else
 	if (chip->usb_present && chip->pseudo_ui_chg)
 		return POWER_SUPPLY_STATUS_CHARGING;
+#endif
 #endif
 
 	if (chg_type == POWER_SUPPLY_CHARGE_TYPE_UNKNOWN ||
 		chg_type == POWER_SUPPLY_CHARGE_TYPE_NONE) {
 		if (chip->chg_status == BQ_CHG_STATUS_FULL)
 			return POWER_SUPPLY_STATUS_FULL;
+#if defined(CONFIG_BQ51053B_CHARGER) && defined(CONFIG_WIRELESS_CHARGER)
+		else if ((chip->usb_present) || (chip->wlc_present))
+#else
 		else if (chip->usb_present)
+#endif
 			return POWER_SUPPLY_STATUS_NOT_CHARGING;
 		else
 			return POWER_SUPPLY_STATUS_DISCHARGING;
@@ -1441,15 +1666,37 @@ static int bq24192_batt_power_get_property(struct power_supply *psy,
 		if (chip->charging_disabled) {
 			val->intval = 0;
 			break;
+#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+	case POWER_SUPPLY_PROP_BATTERY_ID_CHECKER:
+		if (!chip)
+			val->intval = 0;
+		else {
+			if (is_factory_cable())
+				val->intval = 1;
+			else
+				val->intval = chip->batt_id_smem;
 		}
+		break;
+#endif
+		}
+#ifdef CONFIG_WIRELESS_CHARGER
+#ifdef CONFIG_BQ51053B_CHARGER
+		val->intval = chip->ac_online | chip->usb_online
+				| chip->wlc_present;
+#else
+		val->intval = chip->ac_online | chip->usb_online
+				| wireless_charging;
+#endif
+#else
 		val->intval = chip->ac_online | chip->usb_online;
+#endif
 		break;
 	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
-		/* it makes ibat max set following themral mitigation.
-		 * But, SMB349 cannot control ibat current like PMIC.
-		 * if LGE charging scenario make charging thermal control,
-		 * it is good interface to use LG mitigation level.
-		 */
+		/*                                                    
+                                                       
+                                                            
+                                                     
+   */
 		val->intval = 0;
 		break;
 	case POWER_SUPPLY_PROP_PSEUDO_BATT:
@@ -1466,6 +1713,79 @@ static int bq24192_batt_power_get_property(struct power_supply *psy,
 }
 
 
+#ifdef CONFIG_WIRELESS_CHARGER
+int set_wireless_power_supply_control(int value)
+{
+	if (!the_chip) {
+		pr_err("called before init\n");
+		return -EINVAL;
+	}
+#ifdef CONFIG_BQ51053B_CHARGER
+	pr_err(" called value : %d\n", value);
+#endif
+	wireless_charging = value;
+#ifndef CONFIG_BQ51053B_CHARGER
+	power_supply_changed(&the_chip->batt_psy);
+#endif
+	return 0;
+}
+EXPORT_SYMBOL(set_wireless_power_supply_control);
+
+/*W/R function to alternate bq24192_irq_worker n the specific case of WLC insersion or removal
+  *case1. WLC PAD is detected to USB until WLC driver probe is finished completely
+  *case2. BQ24192 IRQ does not happen sometimes when USB is inserted on WLC PAD  */
+#ifdef CONFIG_BQ51053B_CHARGER
+void set_usb_present(int value)
+{
+	if (!the_chip) {
+		pr_err("called before init\n");
+		return;
+	}
+
+	the_chip->wlc_present = !value;
+	the_chip->usb_present = value;
+	wake_lock_timeout(&the_chip->uevent_wake_lock, HZ*2);
+	power_supply_set_present(the_chip->usb_psy, value);
+	return;
+}
+EXPORT_SYMBOL(set_usb_present);
+
+int get_usb_present(void)
+{
+	if (!the_chip) {
+		pr_err("called before init\n");
+		return 0;
+	}
+
+	return the_chip->usb_present;
+}
+EXPORT_SYMBOL(get_usb_present);
+
+bool external_bq24192_is_charger_present(void)
+{
+	bool power_ok;
+
+	if (!the_chip) {
+		pr_err("called before init\n");
+		return 0;
+	}
+
+	power_ok = bq24192_is_charger_present(the_chip);
+
+	if (power_ok)
+		pr_err("DC is present.\n");
+	else
+		pr_err("DC is missing.\n");
+
+	return power_ok;
+
+}
+EXPORT_SYMBOL(external_bq24192_is_charger_present);
+#endif
+
+#endif
+
+
 static int bq24192_batt_power_set_property(struct power_supply *psy,
 				  enum power_supply_property psp,
 				  const union power_supply_propval *val)
@@ -1478,11 +1798,11 @@ static int bq24192_batt_power_set_property(struct power_supply *psy,
 		bq24192_enable_charging(chip, val->intval);
 		break;
 	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
-		/* it makes ibat max set following themral mitigation.
-		 * But, SMB349 cannot control ibat current like PMIC.
-		 * if LGE charging scenario make charging thermal control,
-		 * it is good interface to use LG mitigation level.
-		 */
+		/*                                                    
+                                                       
+                                                            
+                                                     
+   */
 		break;
 	default:
 		return -EINVAL;
@@ -1548,6 +1868,23 @@ static void bq24192_batt_external_power_changed(struct power_supply *psy)
 					msecs_to_jiffies(200));
 		pr_info("ac is online! i_limit = %d\n",	adap_tbl[0].input_limit);
 	}
+#ifdef CONFIG_WIRELESS_CHARGER
+#ifdef CONFIG_BQ51053B_CHARGER
+	else if (wireless_charging) {
+		/*Prepare Wireless Charging */
+		if(is_wireless_charger_plugged()) {
+			bq24192_set_input_i_limit(chip, INPUT_CURRENT_LIMIT_USB20);
+			pr_err("[WLC] Set inuput limit HC mode\n");
+
+			bq24192_set_ibat_max(chip, IBAT_MIN_MA);
+			pr_err("[WLC] Set current HC mode and 500mA : %d\n"
+					,chip->wlc_present);
+		} else {
+			pr_err("[WLC] GPIO SWING\n");
+		}
+	}
+#endif
+#endif
 	
 	chip->usb_psy->get_property(chip->usb_psy,
 			  POWER_SUPPLY_PROP_SCOPE, &ret);
@@ -1822,7 +2159,7 @@ static ssize_t at_otg_status_store(struct device *dev,
 }
 DEVICE_ATTR(at_charge, 0644, at_chg_status_show, at_chg_status_store);
 DEVICE_ATTR(at_chcomp, 0644, at_chg_complete_show, at_chg_complete_store);
-DEVICE_ATTR(at_pmrst, 0644, at_pmic_reset_show, NULL);
+DEVICE_ATTR(at_pmrst, 0640, at_pmic_reset_show, NULL);
 DEVICE_ATTR(at_otg, 0644, at_otg_status_show, at_otg_status_store);
 
 int pseudo_batt_set(struct pseudo_batt_info_type *info)
@@ -1988,7 +2325,7 @@ static void bq24192_monitor_batt_temp(struct work_struct *work)
 		if (res.change_lvl == STS_CHE_NORMAL_TO_DECCUR ||
 			(res.force_update == true && res.state == CHG_BATT_DECCUR_STATE &&
 			res.dc_current != DC_CURRENT_DEF
-#if defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_KDDI)
+#if defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_CN) || defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W) || defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
 			&& res.change_lvl != STS_CHE_STPCHG_TO_DECCUR
 #endif
 			)) {
@@ -2026,7 +2363,7 @@ static void bq24192_monitor_batt_temp(struct work_struct *work)
 			bq24192_enable_charging(chip, !res.disable_chg);
 			wake_unlock(&chip->lcs_wake_lock);
 		}
-#if defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_KDDI)
+#if defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_CN) || defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W) || defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
 		else if (res.change_lvl == STS_CHE_STPCHG_TO_DECCUR) {
 #ifdef CONFIG_LGE_THERMALE_CHG_CONTROL
 			bq24192_set_adjust_ibat(chip,res.dc_current);
@@ -2063,6 +2400,11 @@ static void bq24192_monitor_batt_temp(struct work_struct *work)
 		power_supply_changed(&chip->batt_psy);
 
 	bq24192_reginfo();
+
+	if(!req.is_charger){
+		if (wake_lock_active(&chip->lcs_wake_lock))
+			wake_unlock(&chip->lcs_wake_lock);
+	}
 
 	schedule_delayed_work(&chip->battemp_work,
 		MONITOR_BATTEMP_POLLING_PERIOD);
@@ -2266,6 +2608,22 @@ static int bq24192_parse_dt(struct device_node *dev_node,
 		ret = chip->int_gpio;
 		goto out;
 	}
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+	chip->ext_chg_en = of_get_named_gpio(dev_node, "ti,ext-chg-en-gpio", 0);
+	pr_info("ext_chg_en = %d\n", chip->ext_chg_en);
+	if(chip->ext_chg_en < 0) {
+		pr_err("failed to get ext_chg_en\n");
+		ret = chip->ext_chg_en;
+		goto out;
+	}
+	chip->otg_en = of_get_named_gpio(dev_node, "ti,otg-en-gpio", 0);
+	pr_info("otg_en = %d\n", chip->otg_en);
+	if(chip->otg_en < 0) {
+		pr_err("failed to get otg_en\n");
+		ret = chip->otg_en;
+		goto out;
+	}
+#endif
 
 	ret = of_property_read_u32(dev_node, "ti,chg-current-ma",
 				   &(chip->chg_current_ma));
@@ -2356,6 +2714,9 @@ static int bq24192_probe(struct i2c_client *client,
 	struct device_node *dev_node = client->dev.of_node;
 	struct bq24192_chip *chip;
 	int ret = 0;
+#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+	uint *smem_batt = 0;
+#endif
 
 	unsigned int *p_cable_type = (unsigned int *)
 		(smem_get_entry(SMEM_ID_VENDOR1, &cable_smem_size));
@@ -2411,6 +2772,10 @@ static int bq24192_probe(struct i2c_client *client,
 		}
 
 		chip->int_gpio = pdata->int_gpio;
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+		chip->ext_chg_en = pdata->ext_chg_en;
+		chip->otg_en = pdata->otg_en;
+#endif
 		chip->chg_current_ma = pdata->chg_current_ma;
 		chip->term_current_ma = pdata->term_current_ma;
 		chip->vbat_max_mv = pdata->vbat_max_mv;
@@ -2430,9 +2795,25 @@ static int bq24192_probe(struct i2c_client *client,
 	chip->irq = gpio_to_irq(chip->int_gpio);
 	pr_debug("int_gpio irq#=%d.\n", chip->irq);
 
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+	ret = gpio_request_one(chip->ext_chg_en, GPIOF_DIR_OUT | GPIOF_INIT_LOW,
+			"bq24192_en");
+	if (ret) {
+		pr_err("failed to request bq24192_en\n");
+		goto error;
+	}
+	ret = gpio_request(chip->otg_en, "otg_en");
+	if (ret) {
+		printk("otg_en gpio_request failed for %d ret=%d\n",
+			   chip->otg_en, ret);
+		goto error;
+	}
+	gpio_direction_output(chip->otg_en, 0);
+#endif
+
 	i2c_set_clientdata(client, chip);
 
-#ifdef CONFIG_MACH_MSM8974_Z_US
+#if defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_CN)
 	if(lge_get_boot_mode() == LGE_BOOT_MODE_CHARGERLOGO)
 	{
 		in_chargerlogo = 1;
@@ -2445,7 +2826,7 @@ static int bq24192_probe(struct i2c_client *client,
 #endif
 	ret = bq24192_hw_init(chip);
 	if (ret) {
-		pr_err("smb349_hwinit failed.ret=%d\n",ret);
+		pr_err("bq24192_hwinit failed.ret=%d\n",ret);
 		goto err_hw_init;
 	}
 
@@ -2487,6 +2868,24 @@ static int bq24192_probe(struct i2c_client *client,
 
 	the_chip = chip;
 
+#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+	smem_batt = (uint *)smem_alloc(SMEM_BATT_INFO, sizeof(smem_batt));
+	if (smem_batt == NULL) {
+		pr_err("%s : smem_alloc returns NULL\n",__func__);
+		chip->batt_id_smem = 0;
+	} else {
+		pr_info("Battery was read in sbl is = %d\n", *smem_batt);
+
+		if (*smem_batt == BATT_ID_DS2704_L ||
+			*smem_batt == BATT_ID_DS2704_C ||
+			*smem_batt == BATT_ID_ISL6296_L ||
+			*smem_batt == BATT_ID_ISL6296_C)
+			chip->batt_id_smem = 1;
+		else
+			chip->batt_id_smem = 0;
+	}
+#endif
+
 	if (is_factory_cable()) {		
 		if (is_factory_cable_130k()) {
 			pr_info("factory cable detected(130k) iLimit 500mA\n");
@@ -2506,6 +2905,9 @@ static int bq24192_probe(struct i2c_client *client,
 	}
 
 	INIT_DELAYED_WORK(&chip->irq_work, bq24192_irq_worker);
+#ifdef I2C_SUSPEND_WORKAROUND
+	INIT_DELAYED_WORK(&chip->check_suspended_work, bq24192_check_suspended_worker);
+#endif
 #ifdef CONFIG_LGE_CHARGER_TEMP_SCENARIO
 	INIT_DELAYED_WORK(&chip->battemp_work, bq24192_monitor_batt_temp);
 #endif
@@ -2573,17 +2975,21 @@ static int bq24192_probe(struct i2c_client *client,
 		MONITOR_BATTEMP_POLLING_PERIOD / 3);
 #endif
 	schedule_delayed_work(&chip->irq_work, msecs_to_jiffies(2000));
-
+#ifdef CONFIG_ZERO_WAIT
 	ret = zw_psy_wakeup_source_register(&chip->chg_wake_lock.ws);
 	if (ret < 0)
 		goto err_zw_ws_register;
-
+#endif
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+	qpnp_batif_regist_batt_present(&bq24192_batt_remove_insert_cb);
+#endif
 	pr_info("probe success\n");
 
 	return 0;
-
+#ifdef CONFIG_ZERO_WAIT
 err_zw_ws_register:
 	device_remove_file(&client->dev, &dev_attr_at_otg);
+#endif
 err_at_otg:
 	device_remove_file(&client->dev, &dev_attr_at_pmrst);
 err_at_pmrst:
@@ -2619,9 +3025,9 @@ error:
 static int bq24192_remove(struct i2c_client *client)
 {
 	struct bq24192_chip *chip = i2c_get_clientdata(client);
-
+#ifdef CONFIG_ZERO_WAIT
 	zw_psy_wakeup_source_unregister(&chip->chg_wake_lock.ws);
-
+#endif
 	bq24192_remove_debugfs_entries(chip);
 	device_remove_file(&client->dev, &dev_attr_at_charge);
 	device_remove_file(&client->dev, &dev_attr_at_chcomp);
@@ -2634,6 +3040,9 @@ static int bq24192_remove(struct i2c_client *client)
 	wake_lock_destroy(&chip->lcs_wake_lock);
 #endif
 	wake_lock_destroy(&chip->battgone_wake_lock);
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+	qpnp_batif_unregist_batt_present(0);
+#endif
 	wake_lock_destroy(&chip->icl_wake_lock);
 
 	power_supply_unregister(&chip->ac_psy);
@@ -2643,10 +3052,60 @@ static int bq24192_remove(struct i2c_client *client)
 		free_irq(chip->irq, chip);
 	if (chip->int_gpio)
 		gpio_free(chip->int_gpio);
+#if defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
+	if (chip->otg_en)
+		gpio_free(chip->otg_en);
+#endif
 
 	kfree(chip);
 	return 0;
 }
+
+#ifdef CONFIG_LGE_PM
+static int bq24192_suspend(struct device *dev)
+{
+	struct bq24192_chip *chip = dev_get_drvdata(dev);
+
+	if (!chip) {
+		pr_err(KERN_ERR "%s: called before init\n", __func__);
+		return -ENODEV;
+	}
+#ifdef CONFIG_LGE_CHARGER_TEMP_SCENARIO
+	cancel_delayed_work_sync(&chip->battemp_work);
+#endif
+
+#ifdef I2C_SUSPEND_WORKAROUND
+	chip->suspended = 1;
+#endif
+
+	return 0;
+}
+
+static int bq24192_resume(struct device *dev)
+{
+	struct bq24192_chip *chip = dev_get_drvdata(dev);
+
+	if (!chip) {
+		pr_err(KERN_ERR "%s: called before init\n", __func__);
+		return -ENODEV;
+	}
+
+#ifdef CONFIG_LGE_CHARGER_TEMP_SCENARIO
+	schedule_delayed_work(&chip->battemp_work, HZ*10);
+#endif
+
+#ifdef I2C_SUSPEND_WORKAROUND
+	chip->suspended = 0;
+#endif
+
+	return 0;
+}
+
+static const struct dev_pm_ops bq24192_pm_ops = {
+	.suspend	= bq24192_suspend,
+	.resume		= bq24192_resume,
+};
+#endif
 
 static const struct i2c_device_id bq24192_id[] = {
 	{BQ24192_NAME, 0},
@@ -2664,6 +3123,9 @@ static struct i2c_driver bq24192_driver = {
 			.name	= BQ24192_NAME,
 			.owner	= THIS_MODULE,
 			.of_match_table = of_match_ptr(bq24192_match),
+#ifdef CONFIG_LGE_PM
+			.pm		= &bq24192_pm_ops,
+#endif
 	},
 	.probe		= bq24192_probe,
 	.remove		= bq24192_remove,

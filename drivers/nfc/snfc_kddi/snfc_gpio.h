@@ -48,13 +48,13 @@ struct snfc_gp {
 #define GPIO_SNFC_RFS   	102		//IMA_CDET
 
 /* snfc_int */
-#define GPIO_SNFC_INT   	92		//IMA_INT
+#define GPIO_SNFC_INT   	46		//IMA_INT
 
 /* snfc_lockcont */
-#define GPIO_SNFC_INTU   	94		//IMA_INTU
+#define GPIO_SNFC_INTU   	59		//IMA_INTU
 
 /* snfc_hsel */
-#define GPIO_SNFC_HSEL		59		//NFC_HSEL
+#define GPIO_SNFC_HSEL		94		//NFC_HSEL
 
 /* snfc_hvdd */
 #define GPIO_SNFC_HVDD		145		//NFC_HSEL

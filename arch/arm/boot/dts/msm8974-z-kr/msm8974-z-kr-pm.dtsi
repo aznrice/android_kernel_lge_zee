@@ -101,13 +101,6 @@
 			status = "disable";
 		};
 	};
-
-	qcom,pm8941@1 {
-		qcom,leds@e200 {
-			status = "ok";
-			revision = "...rev_e";
-		};
-	};
 };
 
 &pm8941_gpios {

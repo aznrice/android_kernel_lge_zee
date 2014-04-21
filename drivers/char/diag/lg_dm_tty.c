@@ -62,12 +62,14 @@
 #define DM_TTY_DATA_TO_USB		_IOWR(DM_TTY_IOCTL_MAGIC, 0x05, short)
 #define DM_TTY_MODEM_RESET		_IOWR(DM_TTY_IOCTL_MAGIC, 0x06, short)
 #define DM_TTY_MODEM_CRASH		_IOWR(DM_TTY_IOCTL_MAGIC, 0x07, short)
+#define DM_TTY_MODEM_DEBUGGER	_IOWR(DM_TTY_IOCTL_MAGIC, 0x08, char[300])
 
 #define DM_TTY_MODULE_NAME		"DM_APP"
 #define MAX_DM_TTY_DRV		1
 
 #define TRUE 1
 #define FALSE 0
+#define MAX_SSR_REASON_LEN 81U
 
 /* packet header structure */
 struct dm_router_header {
@@ -179,6 +181,8 @@ static int lge_dm_tty_modem_request(const unsigned char *buf, int count)
 
 	return count;
 }
+
+extern char ssr_noti[MAX_SSR_REASON_LEN];
 
 /* Modem_response command */
 static int lge_dm_tty_modem_response(struct dm_tty *lge_dm_tty_drv,
@@ -531,6 +535,7 @@ static int lge_dm_tty_ioctl(struct tty_struct *tty, unsigned int cmd,
 	struct dm_tty *lge_dm_tty_drv = NULL;
 	int status = 0;
 	int is_all_closed, i;
+	char rw_buf[300];
 
 	result = 0;
 	lge_dm_tty_drv = lge_dm_tty;
@@ -571,6 +576,15 @@ static int lge_dm_tty_ioctl(struct tty_struct *tty, unsigned int cmd,
 						&(driver->smd_data[i].
 							diag_read_smd_work));
 			}// end of for loop			
+
+			for (i = 0; i < NUM_SMD_CMD_CHANNELS; i++) {
+				driver->smd_cmd[i].in_busy_1 = 0;
+				driver->smd_cmd[i].in_busy_2 = 0;
+				if (driver->smd_cmd[i].ch)
+					queue_work(driver->diag_wq,
+						&(driver->smd_cmd[i].
+							diag_read_smd_work));
+			}
 		} else if (modem_number == Secondary_modem_chip) {
 
 			//TBD...
@@ -738,6 +752,19 @@ static int lge_dm_tty_ioctl(struct tty_struct *tty, unsigned int cmd,
 			"DM_TTY_MODEM_CRASH"
 			"result = %d\n", __func__, result);
 	break;
+
+	case DM_TTY_MODEM_DEBUGGER:
+		//woojin
+		memset(rw_buf, 0, sizeof(rw_buf));
+		strcpy(rw_buf,ssr_noti);
+		if (copy_to_user((void *)arg, &rw_buf, sizeof(rw_buf))){
+			pr_info(DM_TTY_MODULE_NAME ": %s: lge_dm_tty_ioctl "
+			"DM_TTY_MODEM_DEBUGGER error! "
+			"rw_buf = %s\n", __func__, rw_buf);
+			return -EFAULT;
+		}
+
+		printk("[woojin]rw_buf = %s\n",rw_buf);
 
 	default:
 		pr_info(DM_TTY_MODULE_NAME ": %s:"

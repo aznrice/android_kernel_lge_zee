@@ -28,14 +28,11 @@ static const char *const map_zw_state[ZW_STATE_MAX] = {
 };
 
 static ATOMIC_NOTIFIER_HEAD(zw_notifier_list);
-
-static int zw_state = ZW_STATE_OFF;
 static DEFINE_SEQLOCK(zw_seqlock);
 
-static int zw_keep_uartcon = 0;
-static DEFINE_SEQLOCK(zw_keep_uartcon_seqlock);
-
+static int zw_state = ZW_STATE_OFF;
 static struct class *zw_class;
+
 static struct platform_device *zwait_pdev;
 
 static inline int read_zw_state(void)
@@ -54,24 +51,6 @@ static inline int read_zw_state(void)
 int is_zw_mode(void)
 {
 	return read_zw_state();
-}
-
-static inline int read_zw_keep_uart_console(void)
-{
-	int val;
-	unsigned seq;
-
-	do {
-		seq = read_seqbegin(&zw_keep_uartcon_seqlock);
-		val = zw_keep_uartcon;
-	} while (read_seqretry(&zw_keep_uartcon_seqlock, seq));
-
-	return val;
-}
-
-int zw_keep_uart_console(void)
-{
-	return read_zw_keep_uart_console();
 }
 
 int zw_notifier_chain_register(struct notifier_block *nb, void *ptr)
@@ -106,7 +85,6 @@ static void zw_suspend_handle(int state)
 		zw_power_pm_clean();
 		zw_psy_update();
 		zw_notifier_call_chain(state);
-		zw_irqs_clean();
 		dpm_wakeup_dev_list_clean();
 		zw_rtc_clean();
 		break;
@@ -115,7 +93,6 @@ static void zw_suspend_handle(int state)
 	case ZW_STATE_ON_USER:
 		power_supply_forbid_change_all();
 		dpm_wakeup_dev_list_set();
-		zw_irqs_set();
 		zw_pwrkey_set(state);
 		zw_power_pm_set();
 		zw_notifier_call_chain(state);
@@ -171,32 +148,25 @@ static CLASS_ATTR(state, 0644, zw_state_show, zw_state_store);
 static ssize_t zw_timeout_show(struct class *class,
 			struct class_attribute *attr, char *buf)
 {
-	return get_zw_timeout(buf);
+	return sprintf(buf, "%lu\n", get_zw_timeout_delay());
 }
 
 static ssize_t zw_timeout_store(struct class *class,
 			struct class_attribute *attr,
 			const char *buf, size_t count)
 {
-	return set_zw_timeout(buf, count);
+	unsigned long sec;
+
+	if (sscanf(buf, "%lu", &sec) != 1)
+		return -EINVAL;
+
+	set_zw_timeout_delay(sec);
+
+	return count;
 }
 
 static CLASS_ATTR(timeout_in_sec, 0644, zw_timeout_show, zw_timeout_store);
 
-static ssize_t zw_delta_show(struct class *class,
-			struct class_attribute *attr, char *buf)
-{
-	return get_zw_delta(buf);
-}
-
-static ssize_t zw_delta_store(struct class *class,
-			struct class_attribute *attr,
-			const char *buf, size_t count)
-{
-	return set_zw_delta(buf, count);
-}
-
-static CLASS_ATTR(delta, 0644, zw_delta_show, zw_delta_store);
 
 static ssize_t zw_retry_show(struct class *class,
 			struct class_attribute *attr, char *buf)
@@ -243,31 +213,6 @@ static ssize_t zw_retry_delay_store(struct class *class,
 static CLASS_ATTR(retry_delay_in_ms, 0644,
 		zw_retry_delay_show, zw_retry_delay_store);
 
-static ssize_t zw_keep_uart_console_show(struct class *class,
-			struct class_attribute *attr, char *buf)
-{
-	return sprintf(buf, "%d\n", read_zw_keep_uart_console());
-}
-
-static ssize_t zw_keep_uart_console_store(struct class *class,
-			struct class_attribute *attr,
-			const char *buf, size_t count)
-{
-	int val;
-
-	if (sscanf(buf, "%d", &val) != 1)
-		return -EINVAL;
-
-	write_seqlock(&zw_keep_uartcon_seqlock);
-	zw_keep_uartcon = val;
-	write_sequnlock(&zw_keep_uartcon_seqlock);
-
-	return count;
-}
-
-static CLASS_ATTR(keep_uart_console, 0644,
-		zw_keep_uart_console_show, zw_keep_uart_console_store);
-
 static struct platform_driver zwait_driver = {
 	.driver = {
 		.name = "zwait",
@@ -294,24 +239,14 @@ static int __init zw_init(void)
 		goto err_class_create_file2;
 	}
 
-	ret = class_create_file(zw_class, &class_attr_delta);
+	ret = class_create_file(zw_class, &class_attr_retry_max);
 	if (ret < 0) {
 		goto err_class_create_file3;
 	}
 
-	ret = class_create_file(zw_class, &class_attr_retry_max);
-	if (ret < 0) {
-		goto err_class_create_file4;
-	}
-
 	ret = class_create_file(zw_class, &class_attr_retry_delay_in_ms);
 	if (ret < 0) {
-		goto err_class_create_file5;
-	}
-
-	ret = class_create_file(zw_class, &class_attr_keep_uart_console);
-	if (ret < 0) {
-		goto err_class_create_file6;
+		goto err_class_create_file4;
 	}
 
 	zwait_pdev = platform_device_register_simple("zwait", -1, NULL, 0);
@@ -330,13 +265,9 @@ static int __init zw_init(void)
 err_platform_driver_register:
 	platform_device_unregister(zwait_pdev);
 err_platform_device_register:
-	class_remove_file(zw_class, &class_attr_keep_uart_console);
-err_class_create_file6:
 	class_remove_file(zw_class, &class_attr_retry_delay_in_ms);
-err_class_create_file5:
-	class_remove_file(zw_class, &class_attr_retry_max);
 err_class_create_file4:
-	class_remove_file(zw_class, &class_attr_delta);
+	class_remove_file(zw_class, &class_attr_retry_max);
 err_class_create_file3:
 	class_remove_file(zw_class, &class_attr_timeout_in_sec);
 err_class_create_file2:
@@ -351,10 +282,8 @@ static void __exit zw_exit(void)
 {
 	platform_driver_unregister(&zwait_driver);
 	platform_device_unregister(zwait_pdev);
-	class_remove_file(zw_class, &class_attr_keep_uart_console);
 	class_remove_file(zw_class, &class_attr_retry_delay_in_ms);
 	class_remove_file(zw_class, &class_attr_retry_max);
-	class_remove_file(zw_class, &class_attr_delta);
 	class_remove_file(zw_class, &class_attr_timeout_in_sec);
 	class_remove_file(zw_class, &class_attr_state);
 	class_destroy(zw_class);

@@ -15,7 +15,6 @@
 
 #include <linux/slab.h>
 #include <linux/mutex.h>
-#include <linux/delay.h>
 #include <linux/zwait.h>
 
 #include "zwait.h"
@@ -84,39 +83,11 @@ void zw_psy_update(void)
 {
 	struct zw_psy *data;
 
-	/*
-	 * NOTE: Here, delay is needed because it takes a little time
-	 *       to change online value when USB/TA charger is attached
-	 *       (zee: 200 ~ 300 ms required)
-	 */
-	mdelay(500);
-
 	mutex_lock(&zw_psy_list_mtx);
 	list_for_each_entry(data, &zw_psy_list, entry) {
 		power_supply_changed(data->psy);
 	}
 	mutex_unlock(&zw_psy_list_mtx);
-}
-
-int zw_psy_get_batt_capacity(void)
-{
-	int ret = -EINVAL;
-	struct zw_psy *data;
-	union power_supply_propval propval;
-
-	mutex_lock(&zw_psy_list_mtx);
-	list_for_each_entry(data, &zw_psy_list, entry) {
-		if (data->psy->type == POWER_SUPPLY_TYPE_BATTERY) {
-			ret = data->psy->get_property(data->psy,
-					POWER_SUPPLY_PROP_CAPACITY, &propval);
-			if (!ret) {
-				ret = propval.intval;
-				break;
-			}
-		}
-	}
-	mutex_unlock(&zw_psy_list_mtx);
-	return ret;
 }
 
 int zw_psy_wakeup_source_register(struct wakeup_source *ws)

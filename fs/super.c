@@ -829,13 +829,6 @@ void emergency_remount(void)
 	}
 }
 
-#ifdef CONFIG_ZERO_WAIT
-void zw_emergency_remount(void)
-{
-	do_emergency_remount(NULL);
-}
-#endif
-
 /*
  * Unnamed block devices are dummy devices used by virtual
  * filesystems which don't use real block-devices.  -- jrs

@@ -29,7 +29,6 @@
 #include <linux/delay.h>
 #include <linux/pm.h>
 #include <linux/of_gpio.h>
-#include <linux/zwait.h>
 
 #include <mach/gpiomux.h>
 #include <mach/board_lge.h>
@@ -49,15 +48,15 @@ extern int msm_serial_set_uart_console(int enable);
 
 static int earjack_debugger_detected(void *dev)
 {
-//[START] VU3 detects earjack debugger even though it doesn't have it. When it's detected, it starts showing UART log and this logging makes device performance low. gunmin.lee@lge.com 2013/07/15
-#if defined (CONFIG_MACH_MSM8974_VU3_KR) || defined(CONFIG_MACH_MSM8974_Z_SPR)|| defined(CONFIG_MACH_MSM8974_Z_ATT_US) || defined(CONFIG_MACH_MSM8974_Z_TMO_US)
+//                                                                                                                                                                                                
+#if defined (CONFIG_MACH_MSM8974_VU3_KR) || defined (CONFIG_MACH_MSM8974_Z_US)
 	printk("earjack debugger is detected on VU3 but do not allow to use it!");
 	return 0;
 #else
 	struct earjack_debugger_device *adev = dev;
 	return !!gpio_get_value(adev->gpio);
 #endif
-//[END] VU3 detects earjack debugger even though it doesn't have it. When it's detected, it starts showing UART log and this logging makes device performance low. gunmin.lee@lge.com 2013/07/15
+//                                                                                                                                                                                              
 }
 
 static irqreturn_t earjack_debugger_irq_handler(int irq, void *_dev)
@@ -66,15 +65,12 @@ static irqreturn_t earjack_debugger_irq_handler(int irq, void *_dev)
 	unsigned int um = lge_get_uart_mode();
 	int detect;
 
-	if (is_zw_mode())
-		return IRQ_HANDLED;
-
-	/* LGE_CHANGE_S
-	 * add debounce time because accure earjack popup noise
-	 * sangwoo2.park@lge.com 2012/12/20
-	 */
+	/*             
+                                                        
+                                    
+  */
 	msleep(400);
-	/* LGE_CHANGE_E */
+	/*              */
 
 	detect = earjack_debugger_detected(adev);
 
@@ -104,54 +100,6 @@ static void earjack_debugger_parse_dt(struct device *dev,
 	struct device_node *np = dev->of_node;
 	pdata->gpio_trigger = of_get_named_gpio_flags(np, "serial,irq-gpio", 0, NULL);
 }
-
-#ifdef CONFIG_ZERO_WAIT
-static int zw_earjack_debugger_notifier_call(struct notifier_block *nb,
-					unsigned long state, void *ptr)
-{
-	struct earjack_debugger_device *dev =
-			(struct earjack_debugger_device *)nb->ptr;
-
-	switch (state) {
-	case ZW_STATE_OFF:
-		if (!zw_keep_uart_console()) {
-			/* if earjack-debugger is detected, then enable */
-			if (earjack_debugger_detected(dev)) {
-				unsigned int um = lge_get_uart_mode();
-				if (um & UART_MODE_INIT_BMSK) {
-					dev->set_uart_console(1);
-				} else {
-					lge_set_uart_mode(
-						um | UART_MODE_EN_BMSK);
-				}
-			}
-		}
-		break;
-
-	case ZW_STATE_ON_SYSTEM:
-	case ZW_STATE_ON_USER:
-		if (!zw_keep_uart_console()) {
-			/* if earjack-debugger is detected, then disable */
-			if (earjack_debugger_detected(dev)) {
-				unsigned int um = lge_get_uart_mode();
-				if (um & UART_MODE_INIT_BMSK) {
-					dev->set_uart_console(0);
-				} else {
-					lge_set_uart_mode(
-						um & ~UART_MODE_EN_BMSK);
-				}
-			}
-		}
-		break;
-	}
-
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block zw_earjack_debugger_nb = {
-	.notifier_call = zw_earjack_debugger_notifier_call,
-};
-#endif /* CONFIG_ZERO_WAIT */
 
 static int __devinit earjack_debugger_probe(struct platform_device *pdev)
 {
@@ -211,10 +159,6 @@ static int __devinit earjack_debugger_probe(struct platform_device *pdev)
 	if (earjack_debugger_detected(adev))
 		adev->set_uart_console(1);
 
-#ifdef CONFIG_ZERO_WAIT
-	zw_notifier_chain_register(&zw_earjack_debugger_nb, adev);
-#endif
-
 	pr_info("earjack debugger probed\n");
 
 	return ret;
@@ -230,10 +174,6 @@ err_gpio_request:
 static int __devexit earjack_debugger_remove(struct platform_device *pdev)
 {
 	struct earjack_debugger_device *adev = platform_get_drvdata(pdev);
-
-#ifdef CONFIG_ZERO_WAIT
-	zw_notifier_chain_unregister(&zw_earjack_debugger_nb);
-#endif
 
 	free_irq(adev->irq, adev);
 	gpio_free(adev->gpio);

@@ -19,25 +19,8 @@
 #include <linux/delay.h>
 #include <linux/reboot.h>
 #include <linux/workqueue.h>
-#include <linux/fs.h>
 #include <linux/zwait.h>
 #include "zwait.h"
-
-enum {
-	ZW_BATTERY_NORMAL = 0,
-	ZW_BATTERY_LOW,
-	ZW_BATTERY_VERYLOW,
-	ZW_BATTERY_STATUS_MAX
-};
-
-struct zw_check_data {
-	struct {
-		int max;	/* capacity */
-		int min;	/* capacity */
-	} range;
-	int delta;		/* capacity */
-	unsigned long timeout;	/* seconds */
-};
 
 struct zw_rtc {
 	struct list_head entry;
@@ -48,78 +31,21 @@ struct zw_rtc {
 static LIST_HEAD(zw_rtc_list);
 static DEFINE_MUTEX(zw_rtc_list_mtx);
 
-static struct zw_check_data zw_check_table[ZW_BATTERY_STATUS_MAX] = {
-	[ZW_BATTERY_NORMAL] = {
-		.range = {100, 20},	/* 100% ~ 20% */
-		.delta = 5,
-		.timeout = (60 * 60UL),	/* 1 hour */
-	},
-	[ZW_BATTERY_LOW] = {
-		.range = {19 , 6},	/* 19% ~ 6% */
-		.delta = 3,
-		.timeout = (30 * 60UL),	/* 30 minutes */
-	},
-	[ZW_BATTERY_VERYLOW] = {
-		.range = {5, 1},	/* 5% ~ 1% */
-		.delta = 0,
-		.timeout = (15 * 60UL),	/* 15 minutes */
-	}
-};
-
-static int zw_batt_capacity;
-static int zw_batt_status;
+static unsigned long zw_timeout_delay = (15 * 60UL);	/* secs */
 static int zw_rtc_retry = 3;
 static int zw_rtc_retry_delay = 200;	/* msecs */
 
 static void zw_rtc_work_func(struct work_struct *work);
 static DECLARE_WORK(zw_rtc_work, zw_rtc_work_func);
 
-ssize_t get_zw_timeout(char *buf)
+unsigned long get_zw_timeout_delay(void)
 {
-	return sprintf(buf, "normal: %lu, low: %lu, very low: %lu\n",
-			zw_check_table[ZW_BATTERY_NORMAL].timeout,
-			zw_check_table[ZW_BATTERY_LOW].timeout,
-			zw_check_table[ZW_BATTERY_VERYLOW].timeout);
+	return zw_timeout_delay;
 }
 
-ssize_t set_zw_timeout(const char *buf, size_t count)
+void set_zw_timeout_delay(unsigned long sec)
 {
-	unsigned long normal;
-	unsigned long low;
-	unsigned long very_low;
-
-	if (sscanf(buf, "%lu %lu %lu", &normal, &low, &very_low) != 3)
-		return -EINVAL;
-
-	zw_check_table[ZW_BATTERY_NORMAL].timeout = normal;
-	zw_check_table[ZW_BATTERY_LOW].timeout = low;
-	zw_check_table[ZW_BATTERY_VERYLOW].timeout = very_low;
-
-	return count;
-}
-
-ssize_t get_zw_delta(char *buf)
-{
-	return sprintf(buf, "normal: %d, low: %d, very low: %d\n",
-			zw_check_table[ZW_BATTERY_NORMAL].delta,
-			zw_check_table[ZW_BATTERY_LOW].delta,
-			zw_check_table[ZW_BATTERY_VERYLOW].delta);
-}
-
-ssize_t set_zw_delta(const char *buf, size_t count)
-{
-	int normal;
-	int low;
-	int very_low;
-
-	if (sscanf(buf, "%d %d %d", &normal, &low, &very_low) != 3)
-		return -EINVAL;
-
-	zw_check_table[ZW_BATTERY_NORMAL].delta = normal;
-	zw_check_table[ZW_BATTERY_LOW].delta = low;
-	zw_check_table[ZW_BATTERY_VERYLOW].delta = very_low;
-
-	return count;
+	zw_timeout_delay = sec;
 }
 
 int get_zw_rtc_retry(void)
@@ -201,7 +127,6 @@ static inline void __zw_rtc_read_time(struct rtc_device *rtc,
 			mdelay(zw_rtc_retry_delay);
 	}
 
-	zw_emergency_remount();
 	kernel_power_off();
 }
 
@@ -220,7 +145,6 @@ static inline void __zw_rtc_set_alarm(struct rtc_device *rtc,
 			mdelay(zw_rtc_retry_delay);
 	}
 
-	zw_emergency_remount();
 	kernel_power_off();
 }
 
@@ -240,7 +164,7 @@ static inline void zw_rtc_set_alarm(bool enable)
 
 	if (enable) {
 		tmp.enabled = 1;
-		time += zw_check_table[zw_batt_status].timeout;
+		time += zw_timeout_delay;
 	}
 
 	rtc_time_to_tm(time, &tmp.time);
@@ -249,64 +173,17 @@ static inline void zw_rtc_set_alarm(bool enable)
 	mutex_unlock(&zw_rtc_list_mtx);
 }
 
-static int zw_battery_status(int capacity)
-{
-	int i;
-
-	if (capacity > 100)
-		capacity = 100;
-
-	for (i = 0; i < ZW_BATTERY_STATUS_MAX; i++) {
-		if ((capacity <= zw_check_table[i].range.max)
-			&& (capacity >= zw_check_table[i].range.min)) {
-			return i;
-		}
-	}
-
-	WARN(1, "%s: out of range(capacity = %d)\n", __func__, capacity);
-	return ZW_BATTERY_VERYLOW;
-}
-
-static inline void zw_power_off_force(void)
-{
-	pr_info("%s: force to power off\n", __func__);
-	zw_rtc_set_alarm(0);
-	zw_rtc_task_clean();
-	zw_emergency_remount();
-	kernel_power_off();
-}
-
 static void zw_rtc_work_func(struct work_struct *work)
 {
-	int current_capacity;
-	int delta = zw_check_table[zw_batt_status].delta;
-
 	pr_info("Timeout in Zero Wait mode!\n");
 
-	current_capacity = zw_psy_get_batt_capacity();
-	pr_info("%s: battery capacity = %d\n", __func__, current_capacity);
-
-	if (current_capacity > zw_batt_capacity)
-		current_capacity = zw_batt_capacity;
-
-	if ((zw_batt_capacity - current_capacity) >= delta) {
-		zw_power_off_force();
-	} else if (zw_batt_status == ZW_BATTERY_LOW) {
-		if (current_capacity < zw_check_table[zw_batt_status].range.min)
-			zw_power_off_force();
-	}
-
-	/* set rtc alarm & suspend again */
-	zw_rtc_set_alarm(1);
+	zw_rtc_set_alarm(0);
+	zw_rtc_task_clean();
+	kernel_power_off();
 }
 
 void zw_rtc_set(void)
 {
-	zw_batt_capacity = zw_psy_get_batt_capacity();
-	pr_info("%s: battery capacity = %d\n", __func__, zw_batt_capacity);
-
-	zw_batt_status = zw_battery_status(zw_batt_capacity);
-
 	zw_rtc_task_set();
 	zw_rtc_set_alarm(1);
 }

@@ -84,7 +84,7 @@
 
 		qcom,pad-pull-on = <0x0 0x0 0x0>; /* no-pull, pull-up, pull-up --> no-pull, no-pull, no-pull */
 		qcom,pad-pull-off = <0x0 0x0 0x0>; /* no-pull, pull-up, pull-up --> no-pull, no-pull, no-pull */
-		qcom,pad-drv-on = <0x2 0x4 0x2>; /* 16mA, 10mA, 10mA --> 6mA, 10mA, 10mA --> 6mA, 10mA, 6mA(By Samsung-Validation) */
+		qcom,pad-drv-on = <0x2 0x4 0x4>; /* 16mA, 10mA, 10mA --> 6mA, 10mA, 10mA */
 		qcom,pad-drv-off = <0x0 0x0 0x0>; /* 2mA, 2mA, 2mA */
 
 	/*	qcom,sup-voltages = <2950 2950>; */ /* This is not needed for SDHC driver */
@@ -292,7 +292,7 @@
 		qcom,sup-voltages = <1800 2950>;
 		qcom,bus-width = <4>;
 		qcom,xpc;
-		/* qcom,nonremovable; */
+		qcom,nonremovable;
 		qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50";
 		qcom,current-limit = <800>;
 
@@ -349,7 +349,7 @@
 		qcom,sup-voltages = <1800 2950>;
 		qcom,bus-width = <4>;
 		qcom,xpc;
-		/* qcom,nonremovable; */
+		qcom,nonremovable;
 		qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50";
 		qcom,current-limit = <800>;
 
@@ -399,6 +399,7 @@
 		qcom,clk-rates = <400000 20000000 25000000 50000000 100000000>;
 		qcom,sup-voltages = <1800 2950>;
 		qcom,bus-width = <4>;
+		qcom,nonremovable;
 		qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50";
 
 		qcom,msm-bus,name = "sdcc3";

@@ -49,7 +49,7 @@ static int snfc_driver_init(void)
 
 	SNFC_DEBUG_MSG_LOW("[snfc_driver] snfc_uart_control_init - start \n");
 
-    rc = platform_driver_register(&snfc_driver);
+       rc = platform_driver_register(&snfc_driver);
 	if (rc)
 	{
 		SNFC_DEBUG_MSG("[snfc_driver] FAIL!! can not register snfc_uart_con_driver \n");

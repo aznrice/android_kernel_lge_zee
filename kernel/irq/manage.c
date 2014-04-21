@@ -543,17 +543,9 @@ int zw_irq_set_irq_wake(unsigned int irq, unsigned int on)
 
 	if (on) {
 		if (desc->zw_wake_depth != 0) {
-			int delta = desc->wake_depth - 0x7FFFFFFF;
-			int depth = desc->zw_wake_depth + delta;
-
-			if (depth > 0) {
-				if (set_irq_wake_real(irq, on) == 0) {
-					irqd_set(&desc->irq_data, IRQD_WAKEUP_STATE);
-					desc->wake_depth = desc->zw_wake_depth;
-					desc->zw_wake_depth = 0;
-				}
-			} else {
-				desc->wake_depth = 0;
+			if (set_irq_wake_real(irq, on) == 0) {
+				irqd_set(&desc->irq_data, IRQD_WAKEUP_STATE);
+				desc->wake_depth = desc->zw_wake_depth;
 				desc->zw_wake_depth = 0;
 			}
 		}

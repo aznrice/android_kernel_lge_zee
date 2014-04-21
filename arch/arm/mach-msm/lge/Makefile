@@ -9,6 +9,7 @@ obj-$(CONFIG_MACH_MSM8974_G2_DCM) += board-8974-g2-dcm.o board-8974-g2-dcm-gpiom
 obj-$(CONFIG_MACH_MSM8974_G2_KDDI) += board-8974-g2-kddi.o board-8974-g2-kddi-gpiomux.o
 obj-$(CONFIG_MACH_MSM8974_G2_OPEN_COM) += board-8974-g2-com.o board-8974-g2-open_com-gpiomux.o
 obj-$(CONFIG_MACH_MSM8974_G2_OPEN_AME) += board-8974-g2-open_ame.o board-8974-g2-open_ame-gpiomux.o
+# OPT_AU will use OPEN_COM Board files. In future OPT related changes will be done under OPT_AU tag.
 obj-$(CONFIG_MACH_MSM8974_G2_OPT_AU) += board-8974-g2-au.o board-8974-g2-opt_au-gpiomux.o
 obj-$(CONFIG_MACH_MSM8974_G2_TEL_AU) += board-8974-g2-tel_au.o board-8974-g2-tel_au-gpiomux.o
 obj-$(CONFIG_MACH_MSM8974_G2_CA) += board-8974-g2-ca.o board-8974-g2-ca-gpiomux.o
@@ -18,7 +19,10 @@ obj-$(CONFIG_MACH_MSM8974_Z_TMO_US) += board-8974-z-us-tmo.o board-8974-z-us-tmo
 obj-$(CONFIG_MACH_MSM8974_Z_KDDI) += board-8974-z-kddi.o board-8974-z-kddi-gpiomux.o
 obj-$(CONFIG_MACH_MSM8974_Z_ATT_US) += board-8974-z-us-att.o board-8974-z-us-att-gpiomux.o
 obj-$(CONFIG_MACH_MSM8974_Z_OPEN_COM) += board-8974-z-open-com.o board-8974-z-open-com-gpiomux.o
+obj-$(CONFIG_MACH_MSM8974_Z_CTC_CN) += board-8974-z-ctc.o board-8974-z-ctc-gpiomux.o
 obj-$(CONFIG_MACH_MSM8974_VU3_KR) += board-8974-vu3-kr.o board-8974-vu3-kr-gpiomux.o
+obj-$(CONFIG_MACH_MSM8974_B1_KR) += board-8974-b1-kr.o board-8974-b1-kr-gpiomux.o
+obj-$(CONFIG_MACH_MSM8974_B1W) += board-8974-b1w.o board-8974-b1w-gpiomux.o
 ifneq ($(CONFIG_BCM4334),)
 obj-$(CONFIG_WIFI_CONTROL_FUNC) += wifi_bcm4334_lge.o
 else

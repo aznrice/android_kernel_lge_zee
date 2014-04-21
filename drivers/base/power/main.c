@@ -34,6 +34,10 @@
 #include "../base.h"
 #include "power.h"
 
+#if defined (CONFIG_MACH_LGE)
+#include <linux/module.h>
+#endif
+
 typedef int (*pm_callback_t)(struct device *);
 
 /*
@@ -757,6 +761,11 @@ static void dpm_drv_timeout(unsigned long data)
 	BUG();
 }
 
+#if defined (CONFIG_MACH_LGE)
+static int nsec64_measure_resume_spend = 10000;// over 10ms
+module_param_named(resume_spend, nsec64_measure_resume_spend, int, S_IRUGO | S_IWUSR | S_IWGRP);
+#endif
+
 /**
  * dpm_resume - Execute "resume" callbacks for non-sysdev devices.
  * @state: PM transition of the system being carried out.
@@ -789,7 +798,16 @@ void dpm_resume(pm_message_t state)
 		if (!is_async(dev)) {
 			int error;
 
+#if defined (CONFIG_MACH_LGE)
+			ktime_t stime,etime;
+#endif
+
 			mutex_unlock(&dpm_list_mtx);
+
+#if defined (CONFIG_MACH_LGE)
+			if (nsec64_measure_resume_spend)
+				stime=ktime_get();
+#endif
 
 			error = device_resume(dev, state, false);
 			if (error) {
@@ -798,6 +816,21 @@ void dpm_resume(pm_message_t state)
 				dpm_save_failed_dev(dev_name(dev));
 				pm_dev_err(dev, state, "", error);
 			}
+
+#if defined (CONFIG_MACH_LGE)
+			if (nsec64_measure_resume_spend) {
+				int usecs;
+				u64 usecs64;
+				etime = ktime_get();
+				usecs64 = ktime_to_ns(ktime_sub(etime, stime));
+				do_div(usecs64, NSEC_PER_USEC);
+				usecs=usecs64;
+				if (usecs64>(u64)nsec64_measure_resume_spend-1) {
+					printk(KERN_EMERG "* DPM device: %s (%s) %d\n", dev_name(dev),
+						(dev->driver ? dev->driver->name : "no driver"),usecs);
+				}
+			}
+#endif
 
 			mutex_lock(&dpm_list_mtx);
 		}

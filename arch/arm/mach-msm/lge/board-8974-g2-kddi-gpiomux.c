@@ -19,11 +19,11 @@
 #include <mach/socinfo.h>
 #include <mach/board_lge.h>
 
-//#define KS8851_IRQ_GPIO 94
-/* soojung.lim@lge.com, 2013-05-23
- * To use 24MHz GP/GCC_GP clock for V2 H/W
+/* #define KS8851_IRQ_GPIO 94 */
+/*                                
+                                          
  */
-int g_is_tlmm_spare_reg_value = 0;
+int g_is_tlmm_spare_reg_value;
 
 static struct gpiomux_setting ap2mdm_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
@@ -129,46 +129,46 @@ static struct gpiomux_setting gpio_uart_felica_active = {
 	.pull = GPIOMUX_PULL_UP,
 };
 static struct gpiomux_setting felica_pon_cfg = {
-    .func = GPIOMUX_FUNC_GPIO,
-    .drv = GPIOMUX_DRV_2MA,
-    .pull = GPIOMUX_PULL_NONE,
-    .dir = GPIOMUX_OUT_LOW,
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+	.dir = GPIOMUX_OUT_LOW,
 };
 static struct gpiomux_setting felica_int_cfg = {
-    .func = GPIOMUX_FUNC_GPIO,
-    .drv = GPIOMUX_DRV_2MA,
-    .pull = GPIOMUX_PULL_UP,
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_UP,
 };
 
 static struct gpiomux_setting felica_rfs_cfg = {
-    .func = GPIOMUX_FUNC_GPIO,
-    .drv = GPIOMUX_DRV_2MA,
-    .pull = GPIOMUX_PULL_UP,
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_UP,
 };
 
 static struct gpiomux_setting felica_lockcont_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
-    .pull = GPIOMUX_PULL_NONE,
-    .dir = GPIOMUX_OUT_LOW,
+	.pull = GPIOMUX_PULL_NONE,
+	.dir = GPIOMUX_OUT_LOW,
 };
 static struct gpiomux_setting nfc_hsel_cfg = {
-    .func = GPIOMUX_FUNC_GPIO,
-    .drv = GPIOMUX_DRV_2MA,
-    .pull = GPIOMUX_PULL_NONE,
-    .dir = GPIOMUX_OUT_LOW,
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+	.dir = GPIOMUX_OUT_LOW,
 };
 static struct gpiomux_setting snfc_intu_cfg = {
-    .func = GPIOMUX_FUNC_GPIO,
-    .drv = GPIOMUX_DRV_2MA,
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_NONE,
 	.dir = GPIOMUX_IN,
 };
 static struct gpiomux_setting snfc_hvdd_cfg = {
-    .func = GPIOMUX_FUNC_GPIO,
-    .drv = GPIOMUX_DRV_2MA,
-    .pull = GPIOMUX_PULL_NONE,
-    .dir = GPIOMUX_OUT_LOW,
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+	.dir = GPIOMUX_OUT_LOW,
 };
 #endif
 static struct gpiomux_setting gpio_uart_config = {
@@ -202,6 +202,11 @@ static struct gpiomux_setting gpio_spi_config = {
 	.func = GPIOMUX_FUNC_1,
 	.drv = GPIOMUX_DRV_12MA,
 	.pull = GPIOMUX_PULL_NONE,
+};
+static struct gpiomux_setting gpio_spi_susp_config = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_DOWN,
 };
 
 static struct gpiomux_setting gpio_spi_cs1_config = {
@@ -241,8 +246,8 @@ static struct gpiomux_setting gpio_epm_config = {
 	.pull = GPIOMUX_PULL_DOWN,
 };
 
-/* LGE_CHANGE_S, [WiFi][hayun.kim@lge.com], 2013-01-22, Wifi Bring Up */
-#if defined (CONFIG_BCMDHD) || defined (CONFIG_BCMDHD_MODULE)
+/*                                                                    */
+#if defined(CONFIG_BCMDHD) || defined(CONFIG_BCMDHD_MODULE)
 #else
 static struct gpiomux_setting wcnss_5wire_suspend_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
@@ -256,20 +261,20 @@ static struct gpiomux_setting wcnss_5wire_active_cfg = {
 	.pull = GPIOMUX_PULL_DOWN,
 };
 #endif
-/* LGE_CHANGE_E, [WiFi][hayun.kim@lge.com], 2013-01-22, Wifi Bring Up */
+/*                                                                    */
 
 
-/* LGE_CHANGE_E,[1seg][youngbea.jung@lge.com], 2013-05-14, 1seg Bring Up */
-#if defined (CONFIG_LGE_BROADCAST_ONESEG)//taew00k.kang
+/*                                                                       */
+#if defined(CONFIG_LGE_BROADCAST_ONESEG)/* taew00k.kang */
 static struct gpiomux_setting lge_1seg_int_pin_suspend = {
-// 1SEG SPI INTERUPT, 1SEG POWER EN, 1SEG LDO EN
+/* 1SEG SPI INTERUPT, 1SEG POWER EN, 1SEG LDO EN */
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_UP,
 };
 
 static struct gpiomux_setting lge_1seg_ctrl_pin_suspend = {
-// 1SEG SPI INTERUPT, 1SEG POWER EN, 1SEG LDO EN
+/* 1SEG SPI INTERUPT, 1SEG POWER EN, 1SEG LDO EN */
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_NONE,
@@ -277,29 +282,29 @@ static struct gpiomux_setting lge_1seg_ctrl_pin_suspend = {
 
 static struct gpiomux_setting lge_1seg_gpio_blsp8_spi_active_config = {
 	/* 80-NA437-1B_MSM8274-MSM8674-MSM8974_GPIO_CONFIGURATION_SPREADSHEET.xlsm  */
-	.func = GPIOMUX_FUNC_1, //Please look @ GPIO function table for correc function
-	.drv = GPIOMUX_DRV_8MA, //Drive Strength
-	.pull = GPIOMUX_PULL_NONE, //Should be PULL NONE
+	.func = GPIOMUX_FUNC_1, /* Please look @ GPIO function table for correc function */
+	.drv = GPIOMUX_DRV_8MA, /* Drive Strength */
+	.pull = GPIOMUX_PULL_NONE, /* Should be PULL NONE */
 };
 
 static struct gpiomux_setting lge_1seg_gpio_blsp8_spi_cs_suspend_config = {
 	/* 80-NA437-1B_MSM8274-MSM8674-MSM8974_GPIO_CONFIGURATION_SPREADSHEET.xlsm  */
-	.func = GPIOMUX_FUNC_1, //Please look @ GPIO function table for correc function
-	.drv = GPIOMUX_DRV_2MA, //Drive Strength
-	.pull = GPIOMUX_PULL_UP, //Should be PULL NONE
+	.func = GPIOMUX_FUNC_1, /* Please look @ GPIO function table for correc function */
+	.drv = GPIOMUX_DRV_2MA, /* Drive Strength */
+	.pull = GPIOMUX_PULL_UP, /* Should be PULL NONE */
 };
 
 static struct gpiomux_setting lge_1seg_gpio_blsp8_spi_suspend_config = {
 	/* 80-NA437-1B_MSM8274-MSM8674-MSM8974_GPIO_CONFIGURATION_SPREADSHEET.xlsm  */
-	.func = GPIOMUX_FUNC_1, //Please look @ GPIO function table for correc function
-	.drv = GPIOMUX_DRV_2MA, //Drive Strength
-	.pull = GPIOMUX_PULL_DOWN, //Should be PULL NONE
+	.func = GPIOMUX_FUNC_1, /* Please look @ GPIO function table for correc function */
+	.drv = GPIOMUX_DRV_2MA, /* Drive Strength */
+	.pull = GPIOMUX_PULL_DOWN, /* Should be PULL NONE */
 };
 
 #endif
 
-/* LGE_CHANGE_E,[1seg][youngbea.jung@lge.com], 2013-05-14, 1seg Bring Up */
-#if defined (CONFIG_LGE_BROADCAST_ONESEG)//taew00k.kang
+/*                                                                       */
+#if defined(CONFIG_LGE_BROADCAST_ONESEG)/* taew00k.kang */
 static struct msm_gpiomux_config lge_1seg_blsp_configs[] __initdata = {
 	{
 		.gpio		= 45,				/* 1SEG_SPI_MOSI, BLSP8_3 */
@@ -342,13 +347,13 @@ static struct msm_gpiomux_config lge_1seg_blsp_configs[] __initdata = {
 		},
 	},
 	{
-		.gpio	   = 77,					// 1SEG_INT_N 
+		.gpio	   = 77,					/* 1SEG_INT_N */
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &lge_1seg_int_pin_suspend,
 		},
 	},
 };
-#endif //defined (CONFIG_LGE_BROADCAST_ONESEG) && (CONFIG_MACH_MSM8974_G2_KDDI))//taew00k.kang
+#endif /*                                                                                       */
 
 static struct gpiomux_setting gpio_i2c_config = {
 	.func = GPIOMUX_FUNC_3,
@@ -450,7 +455,7 @@ static struct gpiomux_setting irda_pwdn_active_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_8MA,
 	.pull = GPIOMUX_PULL_UP,
-	
+
 };
 
 static struct gpiomux_setting gpio_irda_tx_active_config = {
@@ -473,16 +478,16 @@ static struct msm_gpiomux_config irda_pwdn_config[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &irda_pwdn_suspended_config,
 			[GPIOMUX_ACTIVE] = &irda_pwdn_active_config,
 		},
-	},	
+	},
 	{
-		.gpio	   = 8, 		/* BLSP3 UART TX */
+		.gpio	   = 8,		/* BLSP3 UART TX */
 		.settings = {
 			[GPIOMUX_ACTIVE] = &gpio_irda_tx_active_config,
 			[GPIOMUX_SUSPENDED] = &gpio_irda_tx_suspended_config,
 		},
 	},
 	{
-		.gpio	   = 9, 		/* BLSP3 UART RX */
+		.gpio	   = 9,		/* BLSP3 UART RX */
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &gpio_uart_config,
 		},
@@ -549,9 +554,9 @@ static struct gpiomux_setting max17048_int_config = {
 #endif
 
 #if 0
-/* LGE_CHANGE
- * MAIN_CAM_RESET is changed from GPIO_90 to GPIO_4 - To fix build error after changing the function of GPIO_4
- * 2013-03-18, jinw.kim@lge.com
+/*           
+                                                                                                              
+                               
  */
 static struct gpiomux_setting touch_id_act_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
@@ -682,9 +687,9 @@ static struct gpiomux_setting hsic_resume_susp_cfg = {
 
 #if 0	/* Camera will use gpio 145 */
 static struct msm_gpiomux_config msm_hsic_configs[] = {
-/* LGE_CHANGE
- * Camera bring up - DCM
- * 2013-03-14, jinw.kim@lge.com
+/*           
+                        
+                               
  */
 	{
 		.gpio = 145,               /* HSIC_DATA */
@@ -953,7 +958,7 @@ static struct msm_gpiomux_config msm_lcd_configs[] __initdata = {
 };
 
 #if defined(CONFIG_LGE_NFC_SONY_KDDI)
-static struct msm_gpiomux_config msm8974_nfc_configs_revc[] __initdata ={
+static struct msm_gpiomux_config msm8974_nfc_configs_revc[] __initdata  = {
 		/* FELICA PON */
 		{
 			.gpio = 74,
@@ -961,7 +966,7 @@ static struct msm_gpiomux_config msm8974_nfc_configs_revc[] __initdata ={
 				[GPIOMUX_SUSPENDED] = &felica_pon_cfg,
 			},
 		},
-	
+
 		/* FELICA RFS */
 		{
 			.gpio = 102,
@@ -969,7 +974,7 @@ static struct msm_gpiomux_config msm8974_nfc_configs_revc[] __initdata ={
 				[GPIOMUX_SUSPENDED] = &felica_rfs_cfg,
 			},
 		},
-	
+
 		/* FELICA INT */
 		{
 			.gpio = 92,
@@ -977,7 +982,7 @@ static struct msm_gpiomux_config msm8974_nfc_configs_revc[] __initdata ={
 				[GPIOMUX_SUSPENDED] = &felica_int_cfg,
 			},
 		},
-	
+
 		/* FELICA CEN */
 		{
 			.gpio = 89,
@@ -998,16 +1003,16 @@ static struct msm_gpiomux_config msm8974_nfc_configs_revc[] __initdata ={
 			.settings = {
 				[GPIOMUX_SUSPENDED] = &snfc_intu_cfg,
 			},
-		},	
+		},
 		/* NFC HVDD */
 		{
 			.gpio = 145,
 			.settings = {
 				[GPIOMUX_SUSPENDED] = &snfc_hvdd_cfg,
 			},
-		},	
-};	
-static struct msm_gpiomux_config msm8974_nfc_configs_revb[] __initdata ={
+		},
+};
+static struct msm_gpiomux_config msm8974_nfc_configs_revb[] __initdata  = {
 		/* FELICA PON */
 		{
 			.gpio = 74,
@@ -1015,7 +1020,7 @@ static struct msm_gpiomux_config msm8974_nfc_configs_revb[] __initdata ={
 				[GPIOMUX_SUSPENDED] = &felica_pon_cfg,
 			},
 		},
-	
+
 		/* FELICA RFS */
 		{
 			.gpio = 102,
@@ -1023,7 +1028,7 @@ static struct msm_gpiomux_config msm8974_nfc_configs_revb[] __initdata ={
 				[GPIOMUX_SUSPENDED] = &felica_rfs_cfg,
 			},
 		},
-	
+
 		/* FELICA INT */
 		{
 			.gpio = 92,
@@ -1031,7 +1036,7 @@ static struct msm_gpiomux_config msm8974_nfc_configs_revb[] __initdata ={
 				[GPIOMUX_SUSPENDED] = &felica_int_cfg,
 			},
 		},
-	
+
 		/* FELICA CEN */
 		{
 			.gpio = 89,
@@ -1052,15 +1057,15 @@ static struct msm_gpiomux_config msm8974_nfc_configs_revb[] __initdata ={
 			.settings = {
 				[GPIOMUX_SUSPENDED] = &snfc_intu_cfg,
 			},
-		},	
+		},
 		/* NFC HVDD */
 		{
 			.gpio = 145,
 			.settings = {
 				[GPIOMUX_SUSPENDED] = &snfc_hvdd_cfg,
 			},
-		},	
-};	
+		},
+};
 #endif
 
 static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
@@ -1068,31 +1073,36 @@ static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 	{
 		.gpio      = 0,		/* BLSP1 QUP SPI_DATA_MOSI */
 		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_spi_config,
+			[GPIOMUX_ACTIVE] = &gpio_spi_config,
+			[GPIOMUX_SUSPENDED] = &gpio_spi_susp_config,
 		},
 	},
 	{
 		.gpio      = 1,		/* BLSP1 QUP SPI_DATA_MISO */
 		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_spi_config,
+			[GPIOMUX_ACTIVE] = &gpio_spi_config,
+			[GPIOMUX_SUSPENDED] = &gpio_spi_susp_config,
 		},
 	},
 	{
 		.gpio      = 3,		/* BLSP1 QUP SPI_CLK */
 		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_spi_config,
+			[GPIOMUX_ACTIVE] = &gpio_spi_config,
+			[GPIOMUX_SUSPENDED] = &gpio_spi_susp_config,
 		},
 	},
 	{
 		.gpio      = 9,		/* BLSP1 QUP SPI_CS2A_N */
 		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_spi_cs2_config,
+			[GPIOMUX_ACTIVE] = &gpio_spi_cs2_config,
+			[GPIOMUX_SUSPENDED] = &gpio_spi_susp_config,
 		},
 	},
 	{
 		.gpio      = 8,		/* BLSP1 QUP SPI_CS1_N */
 		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_spi_cs1_config,
+			[GPIOMUX_ACTIVE] = &gpio_spi_cs1_config,
+			[GPIOMUX_SUSPENDED] = &gpio_spi_susp_config,
 		},
 	},
 #endif
@@ -1139,9 +1149,9 @@ static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 		},
 	},
 #if 0
-/* LGE_CHANGE
- * MAIN_CAM_RESET is changed from GPIO_90 to GPIO_4
- * 2013-03-18, jinw.kim@lge.com
+/*           
+                                                   
+                               
  */
 #ifdef CONFIG_MACH_LGE
 	{
@@ -1159,7 +1169,7 @@ static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 		},
 	},
 #endif
-#endif	//#if 0
+#endif	/* #if 0 */
 
 #ifdef CONFIG_MACH_LGE
 #else
@@ -1186,20 +1196,20 @@ static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 #endif
 #ifdef CONFIG_LGE_IRRC
 	{
-		.gpio	   = 85, 		/* BLSP2 UART TX */
+		.gpio	   = 85,		/* BLSP2 UART TX */
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &gpio_uart_config,
 		},
 	},
 	{
-		.gpio	   = 86, 		/* BLSP2 UART RX */
+		.gpio	   = 86,		/* BLSP2 UART RX */
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &gpio_uart_config,
 		},
 	},
 #endif
 
-/* LGE_CHANGE_S, [BT][younghyun.kwon@lge.com], 2013-01-29 */
+/*                                                        */
 #ifndef CONFIG_LGE_BLUETOOTH
 	{
 		.gpio      = 53,		/* BLSP2 QUP4 SPI_DATA_MOSI */
@@ -1229,8 +1239,8 @@ static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_suspend_config[0],
 		},
 	},
-#endif /* CONFIG_LGE_BLUETOOTH */
-/* LGE_CHANGE_S, [BT][younghyun.kwon@lge.com], 2013-01-29 */
+#endif /*                      */
+/*                                                        */
 	{
 		.gpio      = 81,		/* EPM enable */
 		.settings = {
@@ -1382,7 +1392,7 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &gpio_suspend_config[0],
 		},
 	},
-#if !defined(CONFIG_LGE_NFC_SONY_KDDI)	
+#if !defined(CONFIG_LGE_NFC_SONY_KDDI)
 	{
 		.gpio = 23, /* FLASH_LED_EN */
 		.settings = {
@@ -1433,7 +1443,7 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 	},
 #endif
 /* TSIF1 GPIO 89~92 is used for 1seg tsif */
-#if !defined (CONFIG_LGE_BROADCAST_ONESEG)
+#if !defined(CONFIG_LGE_BROADCAST_ONESEG)
 	{
 		.gpio = 89, /* CAM1_STANDBY_N */
 		.settings = {
@@ -1441,11 +1451,11 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &cam_settings[1],
 		},
 	},
-#endif  /* CONFIG_LGE_BROADCAST_ONESEG */
+#endif  /*                             */
 #if defined(CONFIG_MACH_LGE)
-/* LGE_CHANGE
- * MAIN_CAM_RESET is changed from GPIO_90 to GPIO_4
- * 2013-03-18, jinw.kim@lge.com
+/*           
+                                                   
+                               
  */
 	{
 		.gpio = 4, /* CAM1_RST_N */
@@ -1454,9 +1464,9 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &cam_settings[4],
 		},
 	},
-#else //Original
+#else /* Original */
 /* TSIF1 GPIO 89~92 is used for 1seg tsif */
-#if !defined (CONFIG_LGE_BROADCAST_ONESEG)
+#if !defined(CONFIG_LGE_BROADCAST_ONESEG)
 	{
 		.gpio = 90, /* CAM1_RST_N */
 		.settings = {
@@ -1464,13 +1474,13 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &cam_settings[1],
 		},
 	},
-#endif  /* CONFIG_LGE_BROADCAST_ONESEG */
+#endif  /*                             */
 #endif
 
 #if defined(CONFIG_BACKLIGHT_LM3630)
 #else
 /* TSIF1 GPIO 89~92 is used for 1seg tsif */
-#if !defined (CONFIG_LGE_BROADCAST_ONESEG)
+#if !defined(CONFIG_LGE_BROADCAST_ONESEG)
 	{
 		.gpio = 91, /* CAM2_STANDBY_N */
 		.settings = {
@@ -1478,10 +1488,10 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &cam_settings[1],
 		},
 	},
-#endif  /* CONFIG_LGE_BROADCAST_ONESEG */
+#endif  /*                             */
 #endif
 /* TSIF1 GPIO 89~92 is used for 1seg tsif */
-#if !defined (CONFIG_LGE_BROADCAST_ONESEG)
+#if !defined(CONFIG_LGE_BROADCAST_ONESEG)
 	{
 		.gpio = 92, /* CAM2_RST_N */
 		.settings = {
@@ -1489,11 +1499,11 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &cam_settings[1],
 		},
 	},
-#endif  /* CONFIG_LGE_BROADCAST_ONESEG */
+#endif  /*                             */
 #if defined(CONFIG_MACH_LGE)
-/* LGE_CHANGE_S
- * Camera bring up - DCM
- * 2013-03-14, jinw.kim@lge.com
+/*             
+                        
+                               
  */
 	{
 		.gpio = 57, /* 13M_VCM_EN */
@@ -1502,7 +1512,7 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &cam_settings[4],
 		},
 	},
-#if 0  //KDDI doesn't support the OIS
+#if 0  /* KDDI doesn't support the OIS */
 	{
 		.gpio = 145, /* OIS_LDO_EN */
 		.settings = {
@@ -1517,7 +1527,7 @@ static struct msm_gpiomux_config msm_sensor_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &cam_settings[1],
 		},
 	},
-#endif	
+#endif
 	{
 		.gpio = 96, /* 13M_VIO */
 		.settings = {
@@ -1581,8 +1591,8 @@ static struct msm_gpiomux_config msm8974_pri_auxpcm_configs[] __initdata = {
 };
 #endif
 
-/* LGE_CHANGE_S, [WiFi][hayun.kim@lge.com], 2013-01-22, Wifi Bring Up */
-#if defined (CONFIG_BCMDHD) || defined (CONFIG_BCMDHD_MODULE)
+/*                                                                    */
+#if defined(CONFIG_BCMDHD) || defined(CONFIG_BCMDHD_MODULE)
 #else
 static struct msm_gpiomux_config wcnss_5wire_interface[] = {
 	{
@@ -1623,7 +1633,7 @@ static struct msm_gpiomux_config wcnss_5wire_interface[] = {
 	},
 };
 #endif
-/* LGE_CHANGE_E, [WiFi][hayun.kim@lge.com], 2013-01-22, Wifi Bring Up */
+/*                                                                    */
 
 static struct msm_gpiomux_config msm_taiko_config[] __initdata = {
 	{
@@ -1686,21 +1696,21 @@ static struct msm_gpiomux_config slimport_configs[] __initdata = {
 #endif
 
 #ifdef CONFIG_MACH_LGE
-static struct gpiomux_setting headset_active_cfg_gpio65 ={
+static struct gpiomux_setting headset_active_cfg_gpio65  = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_UP,
 	.dir  = GPIOMUX_IN,
 };
 
-static struct gpiomux_setting headset_active_cfg_gpio64 ={
+static struct gpiomux_setting headset_active_cfg_gpio64  = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_UP,
 	.dir  = GPIOMUX_IN,
 };
 
-static struct msm_gpiomux_config headset_configs[] ={
+static struct msm_gpiomux_config headset_configs[]  = {
 	{
 		.gpio = 64,
 		.settings = {
@@ -1815,21 +1825,21 @@ static struct msm_gpiomux_config sensor_configs[] __initdata = {
 
 #if defined(CONFIG_LGE_SM100) || defined(CONFIG_TSPDRV)
 static struct gpiomux_setting vibrator_suspend_cfg = {
-       .func = GPIOMUX_FUNC_GPIO,
-       .drv = GPIOMUX_DRV_2MA,
-       .pull = GPIOMUX_PULL_DOWN,
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_DOWN,
 };
 
 static struct gpiomux_setting vibrator_active_cfg_gpio27 = {
-       .func = GPIOMUX_FUNC_6,
-       .drv = GPIOMUX_DRV_2MA,
-       .pull = GPIOMUX_PULL_NONE,
+	.func = GPIOMUX_FUNC_6,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
 };
 
 static struct gpiomux_setting vibrator_active_cfg_gpio60 = {
-       .func = GPIOMUX_FUNC_GPIO,
-       .drv = GPIOMUX_DRV_2MA,
-       .pull = GPIOMUX_PULL_NONE,
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
 };
 
 static struct msm_gpiomux_config vibrator_configs[] = {
@@ -1850,7 +1860,6 @@ static struct msm_gpiomux_config vibrator_configs[] = {
 };
 #endif
 
-#ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
 static struct gpiomux_setting sdc3_clk_actv_cfg = {
 	.func = GPIOMUX_FUNC_2,
 	.drv = GPIOMUX_DRV_8MA,
@@ -1869,9 +1878,9 @@ static struct gpiomux_setting sdc3_suspend_cfg = {
 	.pull = GPIOMUX_PULL_DOWN,
 };
 
-/* LGE_UPDATE, G2-FS@lge.com, 2013/03/27
-* Setting GPIO-37 as IN/PD when sleep in G2-KR-Rev-B.
-* [GPIOMUX_SUSPENDED] = &sdc3_suspend_cfg, //sdc3_data_1_suspend_cfg
+/*                                      
+                                                     
+                                                                    
 */
 /*
 static struct gpiomux_setting sdc3_data_1_suspend_cfg = {
@@ -1903,7 +1912,7 @@ static struct msm_gpiomux_config msm8974_sdc3_configs[] __initdata = {
 		.gpio      = 37,
 		.settings = {
 			[GPIOMUX_ACTIVE]    = &sdc3_cmd_data_0_3_actv_cfg,
-			[GPIOMUX_SUSPENDED] = &sdc3_suspend_cfg, //sdc3_data_1_suspend_cfg
+			[GPIOMUX_SUSPENDED] = &sdc3_suspend_cfg, /* sdc3_data_1_suspend_cfg */
 		},
 	},
 
@@ -1938,9 +1947,6 @@ static void msm_gpiomux_sdc3_install(void)
 	msm_gpiomux_install(msm8974_sdc3_configs,
 			    ARRAY_SIZE(msm8974_sdc3_configs));
 }
-#else
-static void msm_gpiomux_sdc3_install(void) {}
-#endif /* CONFIG_MMC_MSM_SDC3_SUPPORT */
 
 #ifdef CONFIG_MMC_MSM_SDC4_SUPPORT
 static struct gpiomux_setting sdc4_clk_actv_cfg = {
@@ -1969,7 +1975,7 @@ static struct gpiomux_setting sdc4_data_1_suspend_cfg = {
 
 static struct msm_gpiomux_config msm8974_sdc4_configs[] __initdata = {
 /* TSIF1 GPIO 89~92 is used for 1seg tsif */
-#if !defined (CONFIG_LGE_BROADCAST_ONESEG)
+#if !defined(CONFIG_LGE_BROADCAST_ONESEG)
 	{
 		/* DAT3 */
 		.gpio      = 92,
@@ -1978,7 +1984,7 @@ static struct msm_gpiomux_config msm8974_sdc4_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &sdc4_suspend_cfg,
 		},
 	},
-#endif  /* CONFIG_LGE_BROADCAST_ONESEG */
+#endif  /*                             */
 #if !defined(CONFIG_LGE_NFC_SONY_KDDI)
 	{
 		/* DAT2 */
@@ -2000,9 +2006,9 @@ static struct msm_gpiomux_config msm8974_sdc4_configs[] __initdata = {
 	},
 #endif
 #if 0	/* Camera will use gpio 96 */
-/* LGE_CHANGE_S
- * Camera bring up - DCM
- * 2013-03-14, jinw.kim@lge.com
+/*             
+                        
+                               
  */
 	{
 		/* DAT0 */
@@ -2014,7 +2020,7 @@ static struct msm_gpiomux_config msm8974_sdc4_configs[] __initdata = {
 	},
 #endif
 /* TSIF1 GPIO 89~92 is used for 1seg tsif */
-#if !defined (CONFIG_LGE_BROADCAST_ONESEG)
+#if !defined(CONFIG_LGE_BROADCAST_ONESEG)
 	{
 		/* CMD */
 		.gpio      = 91,
@@ -2023,7 +2029,7 @@ static struct msm_gpiomux_config msm8974_sdc4_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &sdc4_suspend_cfg,
 		},
 	},
-#endif /* CONFIG_LGE_BROADCAST_ONESEG */
+#endif /*                             */
 	{
 		/* CLK */
 		.gpio      = 93,
@@ -2043,18 +2049,18 @@ static void msm_gpiomux_sdc4_install(void)
 static void msm_gpiomux_sdc4_install(void) {}
 #endif /* CONFIG_MMC_MSM_SDC4_SUPPORT */
 
-/* LGE_CHANGE_S, [BT][younghyun.kwon@lge.com], 2013-01-29 */
+/*                                                        */
 #ifdef CONFIG_LGE_BLUETOOTH
 static struct gpiomux_setting bt_gpio_uart_active_config = {
-    .func = GPIOMUX_FUNC_2,
-    .drv = GPIOMUX_DRV_8MA,
-    .pull = GPIOMUX_PULL_NONE, /* Should be PULL NONE */
+	.func = GPIOMUX_FUNC_2,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE, /* Should be PULL NONE */
 };
 
 static struct gpiomux_setting bt_gpio_uart_suspend_config = {
-    .func = GPIOMUX_FUNC_GPIO,
-    .drv = GPIOMUX_DRV_2MA,
-    .pull = GPIOMUX_PULL_NONE, /* PULL Configuration */
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE, /* PULL Configuration */
 };
 
 static struct gpiomux_setting bt_rfkill_active_config = {
@@ -2202,22 +2208,22 @@ static struct msm_gpiomux_config bt_pcm_configs[] __initdata = {
 static void bluetooth_msm_gpiomux_install(void)
 {
     /* UART */
-    msm_gpiomux_install(bt_msm_blsp_configs, ARRAY_SIZE(bt_msm_blsp_configs));
+	msm_gpiomux_install(bt_msm_blsp_configs, ARRAY_SIZE(bt_msm_blsp_configs));
 
     /* RFKILL */
-    msm_gpiomux_install(bt_rfkill_configs, ARRAY_SIZE(bt_rfkill_configs));
+	msm_gpiomux_install(bt_rfkill_configs, ARRAY_SIZE(bt_rfkill_configs));
 
     /* HOST WAKE-UP */
-    msm_gpiomux_install(bt_host_wakeup_configs, ARRAY_SIZE(bt_host_wakeup_configs));
+	msm_gpiomux_install(bt_host_wakeup_configs, ARRAY_SIZE(bt_host_wakeup_configs));
 
     /* BT WAKE-UP */
-    msm_gpiomux_install(bt_wakeup_configs, ARRAY_SIZE(bt_wakeup_configs));
+	msm_gpiomux_install(bt_wakeup_configs, ARRAY_SIZE(bt_wakeup_configs));
 
     /* PCM I/F */
-    msm_gpiomux_install(bt_pcm_configs, ARRAY_SIZE(bt_pcm_configs));
+	msm_gpiomux_install(bt_pcm_configs, ARRAY_SIZE(bt_pcm_configs));
 }
-#endif /* CONFIG_LGE_BLUETOOTH */
-/* LGE_CHANGE_E, [BT][younghyun.kwon@lge.com], 2013-01-29 */
+#endif /*                      */
+/*                                                        */
 
 
 static struct msm_gpiomux_config apq8074_dragonboard_ts_config[] __initdata = {
@@ -2247,17 +2253,17 @@ void __init msm_8974_init_gpiomux(void)
 		return;
 	}
 
-/* soojung.lim@lge.com, 2013-05-23
- * To use 24MHz GP/GCC_GP clock for V2 H/W
+/*                                
+                                          
  */
 if (socinfo_get_version() >= 0x20000) {
- g_is_tlmm_spare_reg_value = 0x7;
- msm_tlmm_misc_reg_write(TLMM_SPARE_REG, 0x7);
+	g_is_tlmm_spare_reg_value = 0x7;
+	msm_tlmm_misc_reg_write(TLMM_SPARE_REG, 0x7);
 }
 
-#if defined (CONFIG_LGE_BROADCAST_ONESEG)
-    msm_gpiomux_install(lge_1seg_blsp_configs, ARRAY_SIZE(lge_1seg_blsp_configs));
-#endif  /* CONFIG_LGE_BROADCAST_ONESEG */
+#if defined(CONFIG_LGE_BROADCAST_ONESEG)
+	msm_gpiomux_install(lge_1seg_blsp_configs, ARRAY_SIZE(lge_1seg_blsp_configs));
+#endif  /*                             */
 
 #if defined(CONFIG_LGE_NFC_SONY_KDDI)
 	if (lge_get_board_revno() >= HW_REV_C)
@@ -2284,13 +2290,13 @@ if (socinfo_get_version() >= 0x20000) {
 			ARRAY_SIZE(msm_fuel_gauge_configs));
 #endif
 #endif
-/* LGE_CHANGE_S, [WiFi][hayun.kim@lge.com], 2013-01-22, Wifi Bring Up */
-#if defined (CONFIG_BCMDHD) || defined (CONFIG_BCMDHD_MODULE)
+/*                                                                    */
+#if defined(CONFIG_BCMDHD) || defined(CONFIG_BCMDHD_MODULE)
 #else
 	msm_gpiomux_install(wcnss_5wire_interface,
 				ARRAY_SIZE(wcnss_5wire_interface));
 #endif
-/* LGE_CHANGE_E, [WiFi][hayun.kim@lge.com], 2013-01-22, Wifi Bring Up */
+/*                                                                    */
 
 	msm_gpiomux_install(msm8974_slimbus_config,
 			ARRAY_SIZE(msm8974_slimbus_config));
@@ -2313,7 +2319,7 @@ if (socinfo_get_version() >= 0x20000) {
 
 	msm_gpiomux_install(msm_taiko_config, ARRAY_SIZE(msm_taiko_config));
 
-	//msm_gpiomux_install(msm_hsic_configs, ARRAY_SIZE(msm_hsic_configs));
+	/* msm_gpiomux_install(msm_hsic_configs, ARRAY_SIZE(msm_hsic_configs)); */
 	msm_gpiomux_install(msm_hsic_hub_configs,
 				ARRAY_SIZE(msm_hsic_hub_configs));
 
@@ -2322,10 +2328,8 @@ if (socinfo_get_version() >= 0x20000) {
 		msm_gpiomux_install(msm_mhl_configs,
 				    ARRAY_SIZE(msm_mhl_configs));
 #ifndef CONFIG_MACH_LGE
-	if (of_board_is_liquid() ||
-	    (of_board_is_dragonboard() && machine_is_apq8074()))
-		msm_gpiomux_install(msm8974_pri_ter_auxpcm_configs,
-				 ARRAY_SIZE(msm8974_pri_ter_auxpcm_configs));
+	msm_gpiomux_install(msm8974_pri_auxpcm_configs,
+				 ARRAY_SIZE(msm8974_pri_auxpcm_configs));
 #endif
 	msm_gpiomux_install_nowrite(msm_lcd_configs,
 			ARRAY_SIZE(msm_lcd_configs));
@@ -2343,22 +2347,22 @@ if (socinfo_get_version() >= 0x20000) {
 					ARRAY_SIZE(slimport_configs));
 #endif
 #if defined(CONFIG_MACH_LGE)
-//msm_gpiomux_install(msm_display_configs, ARRAY_SIZE(msm_display_configs));
+/* msm_gpiomux_install(msm_display_configs, ARRAY_SIZE(msm_display_configs)); */
 	msm_gpiomux_install(msm_hall_ic_configs, ARRAY_SIZE(msm_hall_ic_configs));
 
-   	msm_gpiomux_install(headset_configs,ARRAY_SIZE(headset_configs));
+	msm_gpiomux_install(headset_configs, ARRAY_SIZE(headset_configs));
 #endif
 #if 0 /* disable sensor GPIO setting (enable ADSP)*/
 	msm_gpiomux_install(sensor_configs, ARRAY_SIZE(sensor_configs));
 #endif
 #if defined(CONFIG_LGE_SM100) || defined(CONFIG_TSPDRV)
-       msm_gpiomux_install(vibrator_configs, ARRAY_SIZE(vibrator_configs));
+	msm_gpiomux_install(vibrator_configs, ARRAY_SIZE(vibrator_configs));
 #endif
-/* LGE_CHANGE_S, [BT][younghyun.kwon@lge.com], 2013-01-29 */
+/*                                                        */
 #ifdef CONFIG_LGE_BLUETOOTH
-    bluetooth_msm_gpiomux_install();
-#endif /* CONFIG_LGE_BLUETOOTH */
-/* LGE_CHANGE_E, [BT][younghyun.kwon@lge.com], 2013-01-29 */
+	bluetooth_msm_gpiomux_install();
+#endif /*                      */
+/*                                                        */
 
 	if (of_board_is_dragonboard() && machine_is_apq8074())
 		msm_gpiomux_install(apq8074_dragonboard_ts_config,

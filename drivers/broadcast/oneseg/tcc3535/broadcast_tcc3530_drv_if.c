@@ -309,31 +309,23 @@ static int Tcc353xWrapperGetLayerInfo(int layer, Tcc353xStatus_t *st)
 	unsigned int intLen,outIntLen;
 	unsigned char segNo;
 	unsigned int temp;
-
-	if(((st->opstat.syncStatus>>8)&0x0F)<0x0C)
-		return 0xFFFF;
-
+	
 	if(layer==0) {
 		modulation = (st->opstat.AMod & 0x03);
 		cr = (st->opstat.ACr & 0x07);
 		mode = st->opstat.mode;
 		intLen = st->opstat.AIntLen;
 		segNo = st->opstat.ASegNo;
-	} else if(layer==1) {
+	} else {
 		modulation = (st->opstat.BMod & 0x03);
 		cr = (st->opstat.BCr & 0x07);
 		mode = st->opstat.mode;
 		intLen = st->opstat.BIntLen;
 		segNo = st->opstat.BSegNo;
-	} else if(layer==2) {
-		modulation = (st->opstat.CMod & 0x03);
-		cr = (st->opstat.CCr & 0x07);
-		mode = st->opstat.mode;
-		intLen = st->opstat.CIntLen;
-		segNo = st->opstat.CSegNo;
-	} else {
-		return 0xFFFF;
 	}
+
+	if(((st->opstat.syncStatus>>8)&0x0F)<0x0C)
+		return 0xFFFF;
 
 	ret = (modulation << 13);
 	ret |= (cr << 10);
@@ -559,142 +551,83 @@ int	broadcast_drv_if_get_sig_info(struct broadcast_dmb_control_info *pInfo)
 	{
 	case ENUM_GET_ALL:
 		pInfo->sig_info.info.mmb_info.cn = 
-		    st.status.snr.currentValue;
+				st.status.snr.currentValue;
 
-		if(layer==0) {
-			pInfo->sig_info.info.mmb_info.ber_a =
-			    st.opstat.ARsErrorCnt;
-			pInfo->sig_info.info.mmb_info.per_a =
-			    st.opstat.ARsOverCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_a =
-			    st.opstat.ARsCnt;
-			pInfo->sig_info.info.mmb_info.layerinfo_a =
-				Tcc353xWrapperGetLayerInfo(0, &st);
-		} else if(layer==1) {
-			pInfo->sig_info.info.mmb_info.ber_b =
-			    st.opstat.BRsErrorCnt;
-			pInfo->sig_info.info.mmb_info.per_b =
-			    st.opstat.BRsOverCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_b =
-			    st.opstat.BRsCnt;
-			pInfo->sig_info.info.mmb_info.layerinfo_b =
-				Tcc353xWrapperGetLayerInfo(1, &st);
-		} else if(layer==2) {
-			pInfo->sig_info.info.mmb_info.ber_c =
-			    st.opstat.CRsErrorCnt;
-			pInfo->sig_info.info.mmb_info.per_c =
-			    st.opstat.CRsOverCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_c =
-			    st.opstat.CRsCnt;
-			pInfo->sig_info.info.mmb_info.layerinfo_c =
-				Tcc353xWrapperGetLayerInfo(2, &st);
-		} else {
-			pInfo->sig_info.info.mmb_info.ber_a =
-			    st.opstat.ARsErrorCnt;
-			pInfo->sig_info.info.mmb_info.per_a =
-			    st.opstat.ARsOverCnt;
-			pInfo->sig_info.info.mmb_info.ber_b =
-			    st.opstat.BRsErrorCnt;
-			pInfo->sig_info.info.mmb_info.per_b =
-			    st.opstat.BRsOverCnt;
-			pInfo->sig_info.info.mmb_info.ber_c =
-			    st.opstat.CRsErrorCnt;
-			pInfo->sig_info.info.mmb_info.per_c =
-			    st.opstat.CRsOverCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_a =
-			    st.opstat.ARsCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_b =
-			    st.opstat.BRsCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_c =
-			    st.opstat.CRsCnt;
-			pInfo->sig_info.info.mmb_info.layerinfo_a =
-				Tcc353xWrapperGetLayerInfo(0, &st);
-			pInfo->sig_info.info.mmb_info.layerinfo_b =
-				Tcc353xWrapperGetLayerInfo(1, &st);
-			pInfo->sig_info.info.mmb_info.layerinfo_c =
-				Tcc353xWrapperGetLayerInfo(2, &st);
-		}
+		/*
+		pInfo->sig_info.info.mmb_info.ber = 
+				st.status.viterbiber[layer].avgValue;
+				st.opstat.BRsCnt1;
+		pInfo->sig_info.info.mmb_info.per = 
+				st.status.tsper[layer].avgValue;
+		*/
 
-		pInfo->sig_info.info.mmb_info.tmccinfo =
+		if(layer==0)
+			pInfo->sig_info.info.mmb_info.ber = 
+					st.opstat.ARsErrorCnt;
+		else
+			pInfo->sig_info.info.mmb_info.ber = 
+					st.opstat.BRsErrorCnt;
+
+		if(layer==0)
+			pInfo->sig_info.info.mmb_info.per = 
+					st.opstat.ARsOverCnt;
+		else
+			pInfo->sig_info.info.mmb_info.per = 
+					st.opstat.BRsOverCnt;
+
+		if(layer==0)
+			pInfo->sig_info.info.mmb_info.TotalTSP = 
+					st.opstat.ARsCnt;
+		else
+			pInfo->sig_info.info.mmb_info.TotalTSP = 
+					st.opstat.BRsCnt;
+		
+		pInfo->sig_info.info.mmb_info.layerinfo =  
+			Tcc353xWrapperGetLayerInfo(layer, &st);
+
+		pInfo->sig_info.info.mmb_info.tmccinfo = 
 			Tcc353xWrapperGetTmccInfo(&st);
 		
-		pInfo->sig_info.info.mmb_info.receive_status =
+		pInfo->sig_info.info.mmb_info.receive_status = 
 				Tcc353xWrapperGetReceiveStat(&st);
 				
-		pInfo->sig_info.info.mmb_info.rssi =
+		pInfo->sig_info.info.mmb_info.rssi = 
 			(st.status.rssi.avgValue);
 			
 		pInfo->sig_info.info.mmb_info.scan_status =
 			Tcc353xWrapperGetScanStat(&st);
-
+			
 		pInfo->sig_info.info.mmb_info.sysinfo =
 			Tcc353xWrapperGetSysInfo(&st);
 
 #ifdef _DISPLAY_MONITOR_DBG_LOG_
+		TcpalPrintStatus((I08S *)"[mmbi][monitor] Layer[%d] cn[%d] ber[%d] per[%d] totalTSP[%d] layerinfo[%d]\n",
+			layer, 
+			pInfo->sig_info.info.mmb_info.cn, 
+			pInfo->sig_info.info.mmb_info.ber,
+			pInfo->sig_info.info.mmb_info.per, 
+			pInfo->sig_info.info.mmb_info.TotalTSP, 
+			pInfo->sig_info.info.mmb_info.layerinfo);
+		TcpalPrintStatus((I08S *)"[mmbi][monitor] tmccinfo[%d] status[%d] rssi[%d] scanstat[%d] sysinfo[%d]\n",
+			pInfo->sig_info.info.mmb_info.tmccinfo,
+			pInfo->sig_info.info.mmb_info.receive_status,
+			pInfo->sig_info.info.mmb_info.rssi,
+			pInfo->sig_info.info.mmb_info.scan_status,
+			pInfo->sig_info.info.mmb_info.sysinfo);
+#endif
+
+		/* for debugging log */
+#ifdef _DISPLAY_MONITOR_DBG_LOG_
 		{
-			TcpalPrintStatus((I08S *)"[mmbi][monitor] [ENUM_GET_ALL] Layer[%d]\n",layer);
-			if(layer==0 || layer>=3) {
-				TcpalPrintStatus((I08S *)"[mmbi][monitor] Layer A-----------------\n");
-
-				if(pInfo->sig_info.info.mmb_info.layerinfo_a ==0xFFFF) {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] Layer info fail\n");
-				} else {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] Modulation [%s] CR[%s] TimeInterleave[%d] Segment[%d]\n",
-					cModulation[(pInfo->sig_info.info.mmb_info.layerinfo_a>>13)&0x07],
-					cCR[(pInfo->sig_info.info.mmb_info.layerinfo_a>>10)&0x07],
-					(pInfo->sig_info.info.mmb_info.layerinfo_a>>4)&0x1F,
-					(pInfo->sig_info.info.mmb_info.layerinfo_a)&0x0F );
-				}
-
-				TcpalPrintStatus((I08S *)"[mmbi][monitor] ber[%d] per[%d] totalTSP[%d]\n",
-					pInfo->sig_info.info.mmb_info.ber_a,
-					pInfo->sig_info.info.mmb_info.per_a,
-					pInfo->sig_info.info.mmb_info.total_tsp_a);
+			if(pInfo->sig_info.info.mmb_info.layerinfo==0xFFFF) {
+				TcpalPrintStatus((I08S *)"[mmbi][monitor] Layer info fail\n");
+			} else {
+				TcpalPrintStatus((I08S *)"[mmbi][monitor] Modulation [%s] CR[%s] TimeInterleave[%d] Segment[%d]\n",
+				cModulation[(pInfo->sig_info.info.mmb_info.layerinfo>>13)&0x07],
+				cCR[(pInfo->sig_info.info.mmb_info.layerinfo>>10)&0x07],
+				(pInfo->sig_info.info.mmb_info.layerinfo>>4)&0x1F,
+				(pInfo->sig_info.info.mmb_info.layerinfo)&0x0F );
 			}
-
-			if(layer==1 || layer>=3) {
-				TcpalPrintStatus((I08S *)"[mmbi][monitor] Layer B-----------------\n");
-
-				if(pInfo->sig_info.info.mmb_info.layerinfo_b ==0xFFFF) {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] Layer info fail\n");
-				} else {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] Modulation [%s] CR[%s] TimeInterleave[%d] Segment[%d]\n",
-					cModulation[(pInfo->sig_info.info.mmb_info.layerinfo_b>>13)&0x07],
-					cCR[(pInfo->sig_info.info.mmb_info.layerinfo_b>>10)&0x07],
-					(pInfo->sig_info.info.mmb_info.layerinfo_b>>4)&0x1F,
-					(pInfo->sig_info.info.mmb_info.layerinfo_b)&0x0F );
-				}
-
-				TcpalPrintStatus((I08S *)"[mmbi][monitor] ber[%d] per[%d] totalTSP[%d]\n",
-					pInfo->sig_info.info.mmb_info.ber_b,
-					pInfo->sig_info.info.mmb_info.per_b,
-					pInfo->sig_info.info.mmb_info.total_tsp_b);
-			}
-
-			if(layer==2 || layer>=3) {
-				TcpalPrintStatus((I08S *)"[mmbi][monitor] Layer C-----------------\n");
-
-				if(pInfo->sig_info.info.mmb_info.layerinfo_c ==0xFFFF) {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] Layer info fail\n");
-				} else {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] Modulation [%s] CR[%s] TimeInterleave[%d] Segment[%d]\n",
-					cModulation[(pInfo->sig_info.info.mmb_info.layerinfo_c>>13)&0x07],
-					cCR[(pInfo->sig_info.info.mmb_info.layerinfo_c>>10)&0x07],
-					(pInfo->sig_info.info.mmb_info.layerinfo_c>>4)&0x1F,
-					(pInfo->sig_info.info.mmb_info.layerinfo_c)&0x0F );
-				}
-
-				TcpalPrintStatus((I08S *)"[mmbi][monitor] ber[%d] per[%d] totalTSP[%d]\n",
-					pInfo->sig_info.info.mmb_info.ber_c,
-					pInfo->sig_info.info.mmb_info.per_c,
-					pInfo->sig_info.info.mmb_info.total_tsp_c);
-			}
-
-			TcpalPrintStatus((I08S *)"[mmbi][monitor] -----------------------\n");
-
-			TcpalPrintStatus((I08S *)"[mmbi][monitor] rssi[%d] cn[%d]\n",
-				pInfo->sig_info.info.mmb_info.rssi,
-				pInfo->sig_info.info.mmb_info.cn);
 
 			if(pInfo->sig_info.info.mmb_info.tmccinfo==0xFF) {
 				TcpalPrintStatus((I08S *)"[mmbi][monitor] tmcc info fail\n");
@@ -729,104 +662,53 @@ int	broadcast_drv_if_get_sig_info(struct broadcast_dmb_control_info *pInfo)
 	break;
 
 	case ENUM_GET_BER:
-		if(layer==0) {
-			pInfo->sig_info.info.mmb_info.ber_a =
-					st.opstat.ARsErrorCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_a =
-					st.opstat.ARsCnt;
-		} else if(layer==1) {
-			pInfo->sig_info.info.mmb_info.ber_b =
-					st.opstat.BRsErrorCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_b =
-					st.opstat.BRsCnt;
-		} else if(layer==2) {
-			pInfo->sig_info.info.mmb_info.ber_c =
-					st.opstat.CRsErrorCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_c =
-					st.opstat.CRsCnt;
-		} else {
-			pInfo->sig_info.info.mmb_info.ber_a =
-					st.opstat.ARsErrorCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_a =
-					st.opstat.ARsCnt;
-			pInfo->sig_info.info.mmb_info.ber_b =
-					st.opstat.BRsErrorCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_b =
-					st.opstat.BRsCnt;
-			pInfo->sig_info.info.mmb_info.ber_c =
-					st.opstat.CRsErrorCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_c =
-					st.opstat.CRsCnt;
-		}
+		/*
+		pInfo->sig_info.info.mmb_info.ber = 
+			st.status.viterbiber[layer].avgValue;
+		*/
 
-#ifdef _DISPLAY_MONITOR_DBG_LOG_
-		TcpalPrintStatus((I08S *)"[mmbi][monitor] [ENUM_GET_BER] Layer[%d]\n",layer);
-		if(layer==0 || layer>=3) {
-			TcpalPrintStatus((I08S *)"[mmbi][monitor] ber_a[%d] total_tsp_a[%d]\n",
-					pInfo->sig_info.info.mmb_info.ber_a,
-					pInfo->sig_info.info.mmb_info.total_tsp_a);
-		}
-		if(layer==1 || layer>=3) {
-			TcpalPrintStatus((I08S *)"[mmbi][monitor] ber_b[%d] total_tsp_b[%d]\n",
-					pInfo->sig_info.info.mmb_info.ber_b,
-					pInfo->sig_info.info.mmb_info.total_tsp_b);
-		}
-		if(layer==2 || layer>=3) {
-			TcpalPrintStatus((I08S *)"[mmbi][monitor] ber_c[%d] total_tsp_c[%d]\n",
-					pInfo->sig_info.info.mmb_info.ber_c,
-					pInfo->sig_info.info.mmb_info.total_tsp_c);
-		}
-#endif
+		if(layer==0)
+			pInfo->sig_info.info.mmb_info.ber = 
+					st.opstat.ARsErrorCnt;
+		else
+			pInfo->sig_info.info.mmb_info.ber = 
+					st.opstat.BRsErrorCnt;
+
+		if(layer==0)
+			pInfo->sig_info.info.mmb_info.TotalTSP = 
+					st.opstat.ARsCnt;
+		else
+			pInfo->sig_info.info.mmb_info.TotalTSP = 
+					st.opstat.BRsCnt;
+
+		TcpalPrintStatus((I08S *)"[mmbi][monitor] ber[%d] TotalTSP[%d]\n",
+				pInfo->sig_info.info.mmb_info.ber,
+				pInfo->sig_info.info.mmb_info.TotalTSP);
 	break;
 
 	case ENUM_GET_PER:
-		if(layer==0) {
-			pInfo->sig_info.info.mmb_info.per_a =
+		/*
+		pInfo->sig_info.info.mmb_info.per = 
+			st.status.tsper[layer].avgValue;
+		*/
+
+		if(layer==0)
+			pInfo->sig_info.info.mmb_info.per = 
 					st.opstat.ARsOverCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_a =
-					st.opstat.ARsCnt;
-		} else if(layer==1) {
-			pInfo->sig_info.info.mmb_info.per_b =
+		else
+			pInfo->sig_info.info.mmb_info.per = 
 					st.opstat.BRsOverCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_b =
-					st.opstat.BRsCnt;
-		} else if(layer==2) {
-			pInfo->sig_info.info.mmb_info.per_c =
-					st.opstat.CRsOverCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_c =
-					st.opstat.CRsCnt;
-		} else {
-			pInfo->sig_info.info.mmb_info.per_a =
-					st.opstat.ARsOverCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_a =
+
+		if(layer==0)
+			pInfo->sig_info.info.mmb_info.TotalTSP = 
 					st.opstat.ARsCnt;
-			pInfo->sig_info.info.mmb_info.per_b =
-					st.opstat.BRsOverCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_b =
+		else
+			pInfo->sig_info.info.mmb_info.TotalTSP = 
 					st.opstat.BRsCnt;
-			pInfo->sig_info.info.mmb_info.per_c =
-					st.opstat.CRsOverCnt;
-			pInfo->sig_info.info.mmb_info.total_tsp_c =
-					st.opstat.CRsCnt;
-		}
-#ifdef _DISPLAY_MONITOR_DBG_LOG_
-		TcpalPrintStatus((I08S *)"[mmbi][monitor] [ENUM_GET_PER] Layer[%d]\n",layer);
-		if(layer==0 || layer>=3) {
-			TcpalPrintStatus((I08S *)"[mmbi][monitor] per_a[%d] total_tsp_a[%d]\n",
-					pInfo->sig_info.info.mmb_info.per_a,
-					pInfo->sig_info.info.mmb_info.total_tsp_a);
-		}
-		if(layer==1 || layer>=3) {
-			TcpalPrintStatus((I08S *)"[mmbi][monitor] per_b[%d] total_tsp_b[%d]\n",
-					pInfo->sig_info.info.mmb_info.per_b,
-					pInfo->sig_info.info.mmb_info.total_tsp_b);
-		}
-		if(layer==2 || layer>=3) {
-			TcpalPrintStatus((I08S *)"[mmbi][monitor] per_c[%d] total_tsp_c[%d]\n",
-					pInfo->sig_info.info.mmb_info.per_c,
-					pInfo->sig_info.info.mmb_info.total_tsp_c);
-		}
-#endif
+		
+		TcpalPrintStatus((I08S *)"[mmbi][monitor] per[%d] TotalTSP[%d]\n",
+				pInfo->sig_info.info.mmb_info.per,
+				pInfo->sig_info.info.mmb_info.TotalTSP);
 	break;
 
 	case ENUM_GET_CN:
@@ -844,59 +726,22 @@ int	broadcast_drv_if_get_sig_info(struct broadcast_dmb_control_info *pInfo)
 	break;
 
 	case ENUM_GET_LAYER_INFO:
-		if(layer==0) {
-			pInfo->sig_info.info.mmb_info.layerinfo_a =
-				Tcc353xWrapperGetLayerInfo(layer, &st);
-		} else if(layer==1) {
-			pInfo->sig_info.info.mmb_info.layerinfo_b =
-				Tcc353xWrapperGetLayerInfo(layer, &st);
-		} else if(layer==2) {
-			pInfo->sig_info.info.mmb_info.layerinfo_c =
-				Tcc353xWrapperGetLayerInfo(layer, &st);
-		} else {
-			pInfo->sig_info.info.mmb_info.layerinfo_a =
-				Tcc353xWrapperGetLayerInfo(0, &st);
-			pInfo->sig_info.info.mmb_info.layerinfo_b =
-				Tcc353xWrapperGetLayerInfo(1, &st);
-			pInfo->sig_info.info.mmb_info.layerinfo_c =
-				Tcc353xWrapperGetLayerInfo(2, &st);
-		}
+		pInfo->sig_info.info.mmb_info.layerinfo =  
+			Tcc353xWrapperGetLayerInfo(layer, &st);
+		TcpalPrintStatus((I08S *)"[mmbi][monitor]  layer info[%d]\n",
+				pInfo->sig_info.info.mmb_info.layerinfo);
+
+		/* for debugging log */
 #ifdef _DISPLAY_MONITOR_DBG_LOG_
 		{
-			TcpalPrintStatus((I08S *)"[mmbi][monitor] [ENUM_GET_LAYER_INFO] Layer[%d]\n",layer);
-
-			if(layer==0 || layer>=3) {
-				if(pInfo->sig_info.info.mmb_info.layerinfo_a==0xFFFF) {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] layerinfo_a fail\n");
-				} else {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] [A] Modulation [%s] CR[%s] TimeInterleave[%d] Segment[%d]\n",
-					cModulation[(pInfo->sig_info.info.mmb_info.layerinfo_a>>13)&0x07],
-					cCR[(pInfo->sig_info.info.mmb_info.layerinfo_a>>10)&0x07],
-					(pInfo->sig_info.info.mmb_info.layerinfo_a>>4)&0x1F,
-					(pInfo->sig_info.info.mmb_info.layerinfo_a)&0x0F );
-				}
-			}
-			if(layer==1 || layer>=3) {
-				if(pInfo->sig_info.info.mmb_info.layerinfo_b==0xFFFF) {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] layerinfo_b fail\n");
-				} else {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] [B] Modulation [%s] CR[%s] TimeInterleave[%d] Segment[%d]\n",
-					cModulation[(pInfo->sig_info.info.mmb_info.layerinfo_b>>13)&0x07],
-					cCR[(pInfo->sig_info.info.mmb_info.layerinfo_b>>10)&0x07],
-					(pInfo->sig_info.info.mmb_info.layerinfo_b>>4)&0x1F,
-					(pInfo->sig_info.info.mmb_info.layerinfo_b)&0x0F );
-				}
-			}
-			if(layer==2 || layer>=3) {
-				if(pInfo->sig_info.info.mmb_info.layerinfo_c==0xFFFF) {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] layerinfo_c fail\n");
-				} else {
-					TcpalPrintStatus((I08S *)"[mmbi][monitor] [C] Modulation [%s] CR[%s] TimeInterleave[%d] Segment[%d]\n",
-					cModulation[(pInfo->sig_info.info.mmb_info.layerinfo_c>>13)&0x07],
-					cCR[(pInfo->sig_info.info.mmb_info.layerinfo_c>>10)&0x07],
-					(pInfo->sig_info.info.mmb_info.layerinfo_c>>4)&0x1F,
-					(pInfo->sig_info.info.mmb_info.layerinfo_c)&0x0F );
-				}
+			if(pInfo->sig_info.info.mmb_info.layerinfo==0xFFFF) {
+				TcpalPrintStatus((I08S *)"[mmbi][monitor] Layer info fail\n");
+			} else {
+				TcpalPrintStatus((I08S *)"[mmbi][monitor] Modulation [%s] CR[%s] TimeInterleave[%d] Segment[%d]\n",
+				cModulation[(pInfo->sig_info.info.mmb_info.layerinfo>>13)&0x07],
+				cCR[(pInfo->sig_info.info.mmb_info.layerinfo>>10)&0x07],
+				(pInfo->sig_info.info.mmb_info.layerinfo>>4)&0x1F,
+				(pInfo->sig_info.info.mmb_info.layerinfo)&0x0F );
 			}
 		}
 #endif

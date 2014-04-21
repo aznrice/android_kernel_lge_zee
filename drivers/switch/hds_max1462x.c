@@ -62,7 +62,6 @@
 #include <linux/of_gpio.h>
 #include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #include <linux/qpnp/qpnp-adc.h>
-#include <linux/zwait.h>
 #include <mach/gpiomux.h>
 #include <linux/timer.h>
 
@@ -152,7 +151,7 @@ struct hsd_info {
 	atomic_t btn_state;
 	atomic_t isdetect;
 
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 	struct timer_list hook_disable_timer;
 	struct timer_list change_3pole_timer1;
 	struct timer_list change_3pole_timer2;
@@ -161,10 +160,11 @@ struct hsd_info {
 	struct work_struct work;
 	struct delayed_work work_for_key_pressed;
 	struct delayed_work work_for_key_released;
+	struct delayed_work work_for_key_released_remove;
 
 	unsigned char *pdev_name;
 };
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 unsigned int hook_disable;
 unsigned int insert_irq_disable;
 unsigned int flag_3pole;
@@ -237,8 +237,21 @@ static void button_pressed(struct work_struct *work)
 		HSD_ERR("button_pressed but 4 pole ear jack is plugged out already! just ignore the event.\n");
 		return;
 	}
-	rc = qpnp_vadc_read(P_MUX6_1_1,&result);
 
+/* LIMIT: Include ONLY A1, B1, Vu3, Z models used MSM8974 AA/AB */
+#ifdef CONFIG_ADC_READY_CHECK_JB
+	rc = qpnp_vadc_read_lge(P_MUX6_1_1,&result);
+#else
+	/* MUST BE IMPLEMENT :
+	 * After MSM8974 AC and later version(PMIC combination change),
+	 * ADC AMUX of PMICs are separated in each dual PMIC.
+	 *
+	 * Ref.
+	 * qpnp-adc-voltage.c : *qpnp_get_vadc(), qpnp_vadc_read().
+	 * qpnp-charger.c     : new implementation by QCT.
+	 */
+	return;
+#endif
 	if (rc < 0) {
 		if (rc == -ETIMEDOUT) {
 			pr_err("[DEBUG] button_pressed : adc read timeout \n");
@@ -279,6 +292,7 @@ static void button_pressed(struct work_struct *work)
 			break;
 		}
 	}
+	return;
 }
 
 static void button_released(struct work_struct *work)
@@ -320,19 +334,56 @@ static void button_released(struct work_struct *work)
 	}
 }
 
+static void button_released_remove(struct work_struct *work)
+{
+	struct delayed_work *dwork = container_of(work, struct delayed_work, work);
+	struct hsd_info *hi = container_of(dwork, struct hsd_info, work_for_key_released_remove);
+	struct ear_3button_info_table *table;
+	int table_size = ARRAY_SIZE(max1462x_ear_3button_type_data);
+	int i;
+
+       if (!atomic_read(&hi->btn_state)){
+		HSD_ERR("it is not button pressed state. ignore button released\n");
+		return;
+	}
+
+	HSD_DBG("button_released \n");
+	for (i = 0; i < table_size; i++) {
+		table = &max1462x_ear_3button_type_data[i];
+		if (table->PRESS_OR_NOT) {
+			atomic_set(&hi->btn_state, 0);
+			switch(table->ADC_HEADSET_BUTTON){
+				case  KEY_MEDIA :
+					input_report_key(hi->input, KEY_MEDIA, 0);
+					break;
+				case KEY_VOLUMEUP :
+					input_report_key(hi->input, KEY_VOLUMEUP, 0);
+					break;
+				case KEY_VOLUMEDOWN :
+					input_report_key(hi->input, KEY_VOLUMEDOWN, 0);
+					break;
+				default:
+					break;
+			}
+			table->PRESS_OR_NOT = 0;
+			input_sync(hi->input);
+			break;
+		}
+	}
+}
+
 static void insert_headset(struct hsd_info *hi)
 {
 	int earjack_type;
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 	int ret;
 #endif
 
-
 	HSD_DBG("insert_headset\n");
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 	insert_irq_disable = 1;
 #endif
-	
+
 	if(atomic_read(&hi->isdetect))
 	{
 		HSD_DBG("duplicate irq\n");
@@ -343,13 +394,12 @@ static void insert_headset(struct hsd_info *hi)
 	irq_set_irq_wake(hi->irq_key, 1);
 	gpio_direction_output(hi->gpio_mic_en, 1);
 #ifdef CONFIG_SWITCH_MAX1462X_WA
-	msleep(40);
-	#if defined (CONFIG_MACH_MSM8974_G2_TMO_US) || defined (CONFIG_MACH_MSM8974_G2_SPR) || defined (CONFIG_MACH_MSM8974_G2_OPEN_COM) || defined (CONFIG_MACH_MSM8974_G2_CA)
-//		msleep(600);
-//		HSD_DBG("insert delay 600\n");
+	#if defined (CONFIG_MACH_MSM8974_G2_TMO_US) || defined (CONFIG_MACH_MSM8974_G2_SPR) || defined (CONFIG_MACH_MSM8974_G2_OPEN_COM) || defined(CONFIG_MACH_MSM8974_G2_OPT_AU) || defined (CONFIG_MACH_MSM8974_G2_CA)
+		msleep(600);
+		HSD_DBG("insert delay 600\n");
 	#else
-	//	msleep(500);
-	//	HSD_DBG("insert delay 500\n");
+		msleep(500);
+		HSD_DBG("insert delay 500\n");
 	#endif
 #else
 	msleep(40);
@@ -378,9 +428,14 @@ static void insert_headset(struct hsd_info *hi)
 			HSD_DBG("irq_key_enabled = FALSE\n");
 			atomic_set(&hi->irq_key_enabled, TRUE);
 		}
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+
+		input_report_switch(hi->input, SW_HEADPHONE_INSERT, 1);
+		input_report_switch(hi->input, SW_MICROPHONE_INSERT, 1);
+		input_sync(hi->input);
+
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 		ret = mod_timer( &hi->hook_disable_timer, jiffies + msecs_to_jiffies(2500) );
-		
+		HSD_DBG("hook_key disabled for 2.5 sec\n");
 		hook_disable = 1;
 #endif
 	} else {
@@ -394,7 +449,9 @@ static void insert_headset(struct hsd_info *hi)
 		mutex_unlock(&hi->mutex_lock);
 
 		irq_set_irq_wake(hi->irq_key, 0);
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+		input_report_switch(hi->input, SW_HEADPHONE_INSERT, 1);
+		input_sync(hi->input);
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 		retry_3pole = 3;
 		ret = mod_timer( &hi->change_3pole_timer1, jiffies + msecs_to_jiffies(2000) );
 		ret = mod_timer( &hi->change_3pole_timer2, jiffies + msecs_to_jiffies(2070) );
@@ -402,7 +459,7 @@ static void insert_headset(struct hsd_info *hi)
 	}
 	HSD_DBG("####	END insert headset\n");
 	msleep(20);
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 	insert_irq_disable = 0;
 #endif
 
@@ -410,6 +467,8 @@ static void insert_headset(struct hsd_info *hi)
 
 static void remove_headset(struct hsd_info *hi)
 {
+
+	int has_mic = switch_get_state(&hi->sdev);
 
 	HSD_DBG("remove_headset\n");
 	if(atomic_read(&hi->is_3_pole_or_not) == 1)
@@ -422,22 +481,21 @@ static void remove_headset(struct hsd_info *hi)
 	switch_set_state(&hi->sdev, NO_DEVICE);
 	mutex_unlock(&hi->mutex_lock);
 
+	input_report_switch(hi->input, SW_HEADPHONE_INSERT, 0);
+	if (has_mic == LGE_HEADSET)
+		input_report_switch(hi->input, SW_MICROPHONE_INSERT, 0);
+	input_sync(hi->input);
+
 	if (atomic_read(&hi->irq_key_enabled)) {
 		atomic_set(&hi->irq_key_enabled, FALSE);
 	}
 
 	if (atomic_read(&hi->btn_state))
-#ifdef CONFIG_MAX1462X_USE_LOCAL_WORK_QUEUE
-		queue_delayed_work(local_max1462x_workqueue,
-				&(hi->work_for_key_released), hi->latency_for_key );
-#else
-	schedule_delayed_work(&(hi->work_for_key_released),
-			hi->latency_for_key );
-#endif
+		schedule_delayed_work(&(hi->work_for_key_released_remove),
+				hi->latency_for_key );
 	atomic_set(&hi->isdetect,FALSE);
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 	hook_disable = 0;
-	
 	del_timer(&hi->hook_disable_timer);
 	del_timer(&hi->change_3pole_timer1);
 	del_timer(&hi->change_3pole_timer2);
@@ -493,41 +551,47 @@ static irqreturn_t button_irq_handler(int irq, void *dev_id)
 
 	int value;
 
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 	if (insert_irq_disable == 1)
+	{
 		return IRQ_HANDLED;
+	}
 #endif
 
 	if (switch_get_state(&hi->sdev) == NO_DEVICE)
 		return IRQ_HANDLED;
-	
+
 	wake_lock_timeout(&ear_hook_wake_lock, 2 * HZ);
 	HSD_DBG("button_irq_handler\n");
 
 	value = hi->gpio_get_value_func(hi->gpio_key);
 
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 	HSD_DBG("hi->gpio_get_value_func(hi->gpio_key) %d hi->hook_disable : %d\n", value, hook_disable);
 #endif
 
 	if(atomic_read(&hi->is_3_pole_or_not) == 0)
 	{
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 		if (hook_disable)
+		{
+			HSD_DBG("Exit button_irq_handler with hook_disable\n");
 			return IRQ_HANDLED;
+		}
 #endif
 		if (value)
 			queue_delayed_work(local_max1462x_workqueue, &(hi->work_for_key_released), hi->latency_for_key );
 		else
 			queue_delayed_work(local_max1462x_workqueue, &(hi->work_for_key_pressed), hi->latency_for_key );
 	}
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 	else
 	{
 		if (value == 0)
 		{
 			flag_3pole = 0;
 			spmi_write(0x00);
+
 			del_timer(&hi->change_3pole_timer1);
 			del_timer(&hi->change_3pole_timer2);
 			retry_3pole--;
@@ -542,9 +606,10 @@ static irqreturn_t button_irq_handler(int irq, void *dev_id)
 #endif
 	return IRQ_HANDLED;
 }
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 static void hook_disable_timer_func(unsigned long data)
 {
+	HSD_DBG("Hook key enabled\n");
 	hook_disable = 0;
 }
 
@@ -556,6 +621,7 @@ static void change_3pole_timer_func1(unsigned long data)
 
 static void change_3pole_timer_func2(unsigned long data)
 {
+
 	struct hsd_info *hi = (struct hsd_info *) data;
 
 	if (flag_3pole == 1)
@@ -575,7 +641,9 @@ static void change_3pole_timer_func2(unsigned long data)
 			HSD_DBG("irq_key_enabled = FALSE\n");
 			atomic_set(&hi->irq_key_enabled, TRUE);
 		}
-		
+		input_report_switch(hi->input, SW_HEADPHONE_INSERT, 1);
+		input_report_switch(hi->input, SW_MICROPHONE_INSERT, 1);
+		input_sync(hi->input);
 		mod_timer( &hi->hook_disable_timer, jiffies + msecs_to_jiffies(2500) );		
 		hook_disable = 1;
 
@@ -583,7 +651,6 @@ static void change_3pole_timer_func2(unsigned long data)
 }
 
 #endif
-
 
 static void max1462x_parse_dt(struct device *dev, struct max1462x_platform_data *pdata)
 {
@@ -647,14 +714,18 @@ static int lge_hsd_probe(struct platform_device *pdev)
 	hi->gpio_set_value_func = pdata->gpio_set_value_func;
 	hi->gpio_get_value_func = pdata->gpio_get_value_func;
 #ifdef CONFIG_SWITCH_MAX1462X_WA
-	hi->latency_for_key = msecs_to_jiffies(50);
+	hi->latency_for_key = msecs_to_jiffies(80);
 #else
 	hi->latency_for_key = msecs_to_jiffies(50); /* convert milli to jiffies */
+#endif
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
+	hi->latency_for_key = msecs_to_jiffies(80);
 #endif
 	mutex_init(&hi->mutex_lock);
 	INIT_WORK(&hi->work, detect_work);
 	INIT_DELAYED_WORK(&hi->work_for_key_pressed, button_pressed);
 	INIT_DELAYED_WORK(&hi->work_for_key_released, button_released);
+	INIT_DELAYED_WORK(&hi->work_for_key_released_remove, button_released_remove);
 
 	ret = gpio_request(hi->gpio_mic_en, "gpio_mic_en");
 	if (ret < 0) {
@@ -718,7 +789,9 @@ static int lge_hsd_probe(struct platform_device *pdev)
 		HSD_ERR("Failed to set irq_key interrupt wake\n");
 		goto error_06;
 	}
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 	enable_irq(hi->irq_key);
+#endif
 
 	hi->irq_detect = gpio_to_irq(hi->gpio_detect);
 	HSD_DBG("hi->irq_detect = %d\n", hi->irq_detect);
@@ -766,7 +839,7 @@ static int lge_hsd_probe(struct platform_device *pdev)
 	hi->input->id.product   = 1;
 	hi->input->id.version   = 1;
 
-#ifdef CONFIG_SWITCH_MAX1462X_WA
+#ifdef CONFIG_SWITCH_MAX1462X_WA_US
 	setup_timer( &hi->hook_disable_timer, hook_disable_timer_func, 0 );
 	setup_timer( &hi->change_3pole_timer1, change_3pole_timer_func1, 0 );
 	init_timer(&hi->change_3pole_timer2);
@@ -779,13 +852,24 @@ static int lge_hsd_probe(struct platform_device *pdev)
 	{
 		struct qpnp_vadc_result result;
 		int acc_read_value = 0;
-		int i, rc;
+		int i, rc = 0;
 		int count = 3;
 
 		for (i = 0; i < count; i++)
 		{
-			rc = qpnp_vadc_read(P_MUX6_1_1,&result);
-
+/* LIMIT: Include ONLY A1, B1, Vu3, Z models used MSM8974 AA/AB */
+#ifdef CONFIG_ADC_READY_CHECK_JB
+			rc = qpnp_vadc_read_lge(P_MUX6_1_1,&result);
+#else
+			/* MUST BE IMPLEMENT :
+			 * After MSM8974 AC and later version(PMIC combination change),
+			 * ADC AMUX of PMICs are separated in each dual PMIC.
+			 *
+			 * Ref.
+			 * qpnp-adc-voltage.c : *qpnp_get_vadc(), qpnp_vadc_read().
+			 * qpnp-charger.c     : new implementation by QCT.
+			 */
+#endif
 			if (rc < 0)
 			{
 				if (rc == -ETIMEDOUT) {
@@ -802,7 +886,6 @@ static int lge_hsd_probe(struct platform_device *pdev)
 			}
 		}
 	}
-
 	set_bit(EV_SYN, hi->input->evbit);
 	set_bit(EV_KEY, hi->input->evbit);
 	set_bit(EV_SW, hi->input->evbit);
@@ -827,9 +910,6 @@ static int lge_hsd_probe(struct platform_device *pdev)
 	/* to detect in initialization with eacjack insertion */
 	schedule_work(&(hi->work));
 #endif
-
-	zw_irqs_info_register(hi->irq_key, 1);
-	zw_irqs_info_register(hi->irq_detect, 1);
 	return ret;
 
 error_09:
@@ -855,9 +935,6 @@ static int lge_hsd_remove(struct platform_device *pdev)
 	struct hsd_info *hi = (struct hsd_info *)platform_get_drvdata(pdev);
 
 	HSD_DBG("lge_hsd_remove\n");
-
-	zw_irqs_info_unregister(hi->irq_key);
-	zw_irqs_info_unregister(hi->irq_detect);
 
 	if (switch_get_state(&hi->sdev))
 		remove_headset(hi);

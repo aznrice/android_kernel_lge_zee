@@ -26,7 +26,7 @@
 #define SCDT_EXPIRE_TH 10
 #define SP_TX_HDCP_FAIL_TH 10
 #define SP_TX_DS_VID_STB_TH 20
-//#define SP_REGISTER_SET_TEST
+/* #define SP_REGISTER_SET_TEST */
 
 extern unchar bedid_extblock[128];
 extern unchar bedid_firstblock[128];
@@ -34,6 +34,21 @@ extern unchar bedid_firstblock[128];
 extern unchar slimport_link_bw;
 extern int external_block_en;
 
+#ifdef SP_REGISTER_SET_TEST
+/* For Slimport test */
+extern unchar val_SP_TX_LT_CTRL_REG0 ;
+extern unchar val_SP_TX_LT_CTRL_REG10 ;
+extern unchar val_SP_TX_LT_CTRL_REG11 ;
+extern unchar val_SP_TX_LT_CTRL_REG2 ;
+extern unchar val_SP_TX_LT_CTRL_REG12;
+extern unchar val_SP_TX_LT_CTRL_REG1;
+extern unchar val_SP_TX_LT_CTRL_REG6;
+extern unchar val_SP_TX_LT_CTRL_REG16;
+extern unchar val_SP_TX_LT_CTRL_REG5;
+extern unchar val_SP_TX_LT_CTRL_REG8;
+extern unchar val_SP_TX_LT_CTRL_REG15;
+extern unchar val_SP_TX_LT_CTRL_REG18;
+#endif
 enum SP_TX_System_State {
 	STATE_INIT = 1,
 	STATE_CABLE_PLUG,
@@ -172,9 +187,9 @@ void hdmi_rx_set_termination(unchar enable);
 /* ***************************************************************** */
 /* Functions protoype for slimport_rx anx7730 */
 /* ***************************************************************** */
-bool source_aux_read_7730dpcd(long addr,unchar cCount,unchar * pBuf);
-bool source_aux_write_7730dpcd(long addr,unchar cCount,unchar * pBuf);
-bool i2c_master_read_reg(unchar Sink_device_sel, unchar offset, unchar * Buf);
-bool i2c_master_write_reg(unchar Sink_device_sel,unchar offset, unchar value);
+bool source_aux_read_7730dpcd(long addr, unchar cCount, unchar *pBuf);
+bool source_aux_write_7730dpcd(long addr, unchar cCount, unchar *pBuf);
+bool i2c_master_read_reg(unchar Sink_device_sel, unchar offset, unchar *Buf);
+bool i2c_master_write_reg(unchar Sink_device_sel, unchar offset, unchar value);
 
 #endif

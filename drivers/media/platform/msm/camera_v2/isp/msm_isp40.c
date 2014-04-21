@@ -268,6 +268,8 @@ static int msm_vfe40_init_hardware(struct vfe_device *vfe_dev)
 			goto fs_failed;
 		}
 	}
+	else
+		goto fs_failed;
 
 	rc = msm_cam_clk_enable(&vfe_dev->pdev->dev, msm_vfe40_clk_info,
 		vfe_dev->vfe_clk, ARRAY_SIZE(msm_vfe40_clk_info), 1);
@@ -514,15 +516,17 @@ static void msm_vfe40_read_irq_status(struct vfe_device *vfe_dev,
 {
 	*irq_status0 = msm_camera_io_r(vfe_dev->vfe_base + 0x38);
 	*irq_status1 = msm_camera_io_r(vfe_dev->vfe_base + 0x3C);
-	/*Ignore composite 3 irq which is used for dual VFE only*/
+	/*
+	 * Ignore composite 2/3 irq which is used for dual VFE only
+	 */
 	if (*irq_status0 & 0x6000000)
-		*irq_status0 &= ~(0x10000000);
+		*irq_status0 &= ~(0x18000000);
 	msm_camera_io_w(*irq_status0, vfe_dev->vfe_base + 0x30);
 	msm_camera_io_w(*irq_status1, vfe_dev->vfe_base + 0x34);
 	msm_camera_io_w_mb(1, vfe_dev->vfe_base + 0x24);
-	if (*irq_status0 & 0x10000000) {
+	if (*irq_status0 & 0x18000000) {
 		pr_err_ratelimited("%s: Protection triggered\n", __func__);
-		*irq_status0 &= ~(0x10000000);
+		*irq_status0 &= ~(0x18000000);
 	}
 
 	if (*irq_status1 & (1 << 0))
@@ -608,22 +612,29 @@ static void msm_vfe40_axi_cfg_comp_mask(struct vfe_device *vfe_dev,
 	comp_mask &= ~(0x7F << (comp_mask_index * 8));
 	comp_mask |= (axi_data->composite_info[comp_mask_index].
 		stream_composite_mask << (comp_mask_index * 8));
-/* QMC_PATCH_S, Fix preview split issue on 720p, 2013-07-05, jinw.kim@lge.com */
-#if 0  //QMC Original
-	if (stream_info->plane_cfg[0].plane_addr_offset)
-#else
-	if (stream_info->plane_cfg[0].plane_addr_offset &&
-			stream_info->stream_type == CONTINUOUS_STREAM)
-#endif
-/* QMC_PATCH_E, Fix preview split issue on 720p, 2013-07-05, jinw.kim@lge.com */
-		comp_mask |= (axi_data->composite_info[comp_mask_index].
-		stream_composite_mask << 24);
-	msm_camera_io_w(comp_mask, vfe_dev->vfe_base + 0x40);
 
 	irq_mask = msm_camera_io_r(vfe_dev->vfe_base + 0x28);
 	irq_mask |= 1 << (comp_mask_index + 25);
-	if (stream_info->plane_cfg[0].plane_addr_offset && (comp_mask >> 24))
+
+	/*
+	 * For dual VFE, composite 2/3 interrupt is used to trigger
+	 * microcontroller to update certain VFE registers
+	 */
+	if (stream_info->plane_cfg[0].plane_addr_offset &&
+		stream_info->stream_src == PIX_VIEWFINDER) {
+		comp_mask |= (axi_data->composite_info[comp_mask_index].
+		stream_composite_mask << 16);
+		irq_mask |= BIT(27);
+	}
+
+	if (stream_info->plane_cfg[0].plane_addr_offset &&
+		stream_info->stream_src == PIX_ENCODER) {
+		comp_mask |= (axi_data->composite_info[comp_mask_index].
+		stream_composite_mask << 24);
 		irq_mask |= BIT(28);
+	}
+
+	msm_camera_io_w(comp_mask, vfe_dev->vfe_base + 0x40);
 	msm_camera_io_w(irq_mask, vfe_dev->vfe_base + 0x28);
 }
 
@@ -636,15 +647,25 @@ static void msm_vfe40_axi_clear_comp_mask(struct vfe_device *vfe_dev,
 
 	comp_mask = msm_camera_io_r(vfe_dev->vfe_base + 0x40);
 	comp_mask &= ~(0x7F << (comp_mask_index * 8));
-	if (stream_info->plane_cfg[0].plane_addr_offset)
-		comp_mask &= ~(axi_data->composite_info[comp_mask_index].
-		stream_composite_mask << 24);
-	msm_camera_io_w(comp_mask, vfe_dev->vfe_base + 0x40);
 
 	irq_mask = msm_camera_io_r(vfe_dev->vfe_base + 0x28);
 	irq_mask &= ~(1 << (comp_mask_index + 25));
-	if (stream_info->plane_cfg[0].plane_addr_offset && (comp_mask >> 24))
+
+	if (stream_info->plane_cfg[0].plane_addr_offset &&
+		stream_info->stream_src == PIX_VIEWFINDER) {
+		comp_mask &= ~(axi_data->composite_info[comp_mask_index].
+		stream_composite_mask << 16);
+		irq_mask &= ~BIT(27);
+	}
+
+	if (stream_info->plane_cfg[0].plane_addr_offset &&
+		stream_info->stream_src == PIX_ENCODER) {
+		comp_mask &= ~(axi_data->composite_info[comp_mask_index].
+		stream_composite_mask << 24);
 		irq_mask &= ~BIT(28);
+	}
+
+	msm_camera_io_w(comp_mask, vfe_dev->vfe_base + 0x40);
 	msm_camera_io_w(irq_mask, vfe_dev->vfe_base + 0x28);
 }
 
@@ -705,13 +726,18 @@ static void msm_vfe40_clear_framedrop(struct vfe_device *vfe_dev,
 			VFE40_WM_BASE(stream_info->wm[i]) + 0x1C);
 }
 
-static void msm_vfe40_cfg_io_format(struct vfe_device *vfe_dev,
+static int32_t msm_vfe40_cfg_io_format(struct vfe_device *vfe_dev,
 	enum msm_vfe_axi_stream_src stream_src, uint32_t io_format)
 {
 	int bpp, bpp_reg = 0, pack_reg = 0;
 	enum msm_isp_pack_fmt pack_fmt = 0;
 	uint32_t io_format_reg; /*io format register bit*/
 	bpp = msm_isp_get_bit_per_pixel(io_format);
+	if (bpp < 0) {
+		pr_err("%s:%d invalid io_format %d bpp %d", __func__, __LINE__,
+			io_format, bpp);
+		return -EINVAL;
+	}
 
 	switch (bpp) {
 	case 8:
@@ -723,6 +749,9 @@ static void msm_vfe40_cfg_io_format(struct vfe_device *vfe_dev,
 	case 12:
 		bpp_reg = 1 << 1;
 		break;
+	default:
+		pr_err("%s:%d invalid bpp %d", __func__, __LINE__, bpp);
+		return -EINVAL;
 	}
 
 	if (stream_src == IDEAL_RAW) {
@@ -749,7 +778,7 @@ static void msm_vfe40_cfg_io_format(struct vfe_device *vfe_dev,
 			break;
 		default:
 			pr_err("%s: invalid pack fmt!\n", __func__);
-			return;
+			return -EINVAL;
 		}
 	}
 
@@ -770,9 +799,10 @@ static void msm_vfe40_cfg_io_format(struct vfe_device *vfe_dev,
 	case RDI_INTF_2:
 	default:
 		pr_err("%s: Invalid stream source\n", __func__);
-		return;
+		return -EINVAL;
 	}
 	msm_camera_io_w(io_format_reg, vfe_dev->vfe_base + 0x54);
+	return 0;
 }
 
 static void msm_vfe40_cfg_camif(struct vfe_device *vfe_dev,
@@ -847,7 +877,10 @@ static void msm_vfe40_update_camif_state(struct vfe_device *vfe_dev,
 		msm_camera_io_w_mb(0x0, vfe_dev->vfe_base + 0x2F4);
 		vfe_dev->axi_data.src_info[VFE_PIX_0].active = 0;
 	} else if (update_state == DISABLE_CAMIF_IMMEDIATELY) {
-		msm_camera_io_w_mb(0x2, vfe_dev->vfe_base + 0x2F4);
+		msm_camera_io_w_mb(0x6, vfe_dev->vfe_base + 0x2F4);
+		vfe_dev->hw_info->vfe_ops.axi_ops.halt(vfe_dev);
+		vfe_dev->hw_info->vfe_ops.core_ops.reset_hw(vfe_dev);
+		vfe_dev->hw_info->vfe_ops.core_ops.init_hw_reg(vfe_dev);
 		vfe_dev->axi_data.src_info[VFE_PIX_0].active = 0;
 	}
 }
@@ -1356,7 +1389,7 @@ static void msm_vfe40_get_error_mask(
 
 static struct msm_vfe_axi_hardware_info msm_vfe40_axi_hw_info = {
 	.num_wm = 5,
-	.num_comp_mask = 3,
+	.num_comp_mask = 2,
 	.num_rdi = 3,
 	.num_rdi_master = 3,
 	.min_wm_ub = 64,

@@ -28,6 +28,7 @@
 **/
 #define CPP_HW_VERSION_1_1_0  0x10010000
 #define CPP_HW_VERSION_1_1_1  0x10010001
+#define CPP_HW_VERSION_2_0_0  0x20000000
 
 #define MAX_ACTIVE_CPP_INSTANCE 8
 #define MAX_CPP_PROCESSING_FRAME 2
@@ -181,10 +182,13 @@ struct cpp_device {
 	char *fw_name_bin;
 	struct workqueue_struct *timer_wq;
 	struct msm_cpp_work_t *work;
-
-/*QCT_PATCH S, fix lockup when start camera with 13M resolution, 2013-10-31, yt.kim@lge.com */
+/*                                                                                    */
+#if !(defined(CONFIG_MACH_MSM8974_VU3_KR))
+/*                                                                                          */
 	uint8_t stream_cnt;
-/*QCT_PATCH E, fix lockup when start camera with 13M resolution, 2013-10-31, yt.kim@lge.com */
+/*                                                                                          */
+#endif
+/*                                                                                    */
 	int domain_num;
 	struct iommu_domain *domain;
 	struct device *iommu_ctx;

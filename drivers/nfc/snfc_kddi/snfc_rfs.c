@@ -118,7 +118,7 @@ int snfc_rfs_probe(struct device_node *np)
 		return rc;
 	}
 
-	snfc_gpios.gpio_rfs = of_get_named_gpio_flags(np, "sony,rfs-gpio", 0, NULL);
+    snfc_gpios.gpio_rfs = of_get_named_gpio_flags(np, "sony,rfs-gpio", 0, NULL);
     rc = gpio_request(snfc_gpios.gpio_rfs, "snfc_rfs");
     if (rc)
     {

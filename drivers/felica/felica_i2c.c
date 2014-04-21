@@ -92,7 +92,8 @@ int felica_i2c_set_slave_address (unsigned char slave_address)
 {
   int rc = -1;
 
-  rc = sys_ioctl(fd, I2C_SLAVE, slave_address>>1); // 7-bit address
+  rc = sys_ioctl(fd, I2C_SLAVE_FORCE, slave_address>>1); // 7-bit address
+//  rc = sys_ioctl(fd, I2C_SLAVE, slave_address>>1); // 7-bit address
 
   if (rc < 0)
   {

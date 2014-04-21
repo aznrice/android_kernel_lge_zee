@@ -117,31 +117,6 @@ typedef struct
 	int mode;
 }oneseg_sig_info;
 
-#if 1
-typedef struct
-{
-	int cn;
-	int ber_a;
-	int per_a;
-	int layerinfo_a;
-	int tmccinfo;
-	int receive_status;
-	int rssi;
-	int scan_status;
-	int sysinfo;
-	int total_tsp_a;
-
-	int ber_b;
-	int per_b;
-	int layerinfo_b;
-	int total_tsp_b;
-
-	int ber_c;
-	int per_c;
-	int layerinfo_c;
-	int total_tsp_c;
-}mmb_sig_info;
-#else
 typedef struct
 {
 	int cn;
@@ -155,7 +130,6 @@ typedef struct
 	int sysinfo;
 	int TotalTSP;
 }mmb_sig_info;
-#endif
 
 struct broadcast_dmb_sync_info
 {

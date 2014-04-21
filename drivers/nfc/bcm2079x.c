@@ -36,9 +36,9 @@
 #include <linux/spinlock.h>
 #include <linux/poll.h>
 #include <linux/version.h>
-/*  LGE_CHANGE_S, [NFC][wongab.jeon@lge.com], 2013-02-13, NFC Bring up */
+/*                                                                     */
 #include <linux/of_gpio.h>
-/*  LGE_CHANGE_E, [NFC][wongab.jeon@lge.com], 2013-02-13, NFC Bring up */
+/*                                                                     */
 
 #include <linux/nfc/bcm2079x.h>
 #include <linux/wakelock.h>
@@ -52,10 +52,11 @@
 #define PACKET_TYPE_NCI     (16)
 #define PACKET_TYPE_HCIEV   (4)
 #define MAX_PACKET_SIZE     (PACKET_HEADER_SIZE_NCI + 255)
-// LGE_START byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+
+//                                                                          
 #define NFC_POWER_ON    1
 #define NFC_POWER_OFF   0
-// LGE_END byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+//                                                                        
 
 struct bcm2079x_dev {
     wait_queue_head_t read_wq;
@@ -72,9 +73,13 @@ struct bcm2079x_dev {
 };
 
 struct wake_lock nfc_wake_lock;
-// LGE_START byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+//                                                                          
 static unsigned char sPowerState = NFC_POWER_OFF;
-// LGE_END byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+//                                                                        
+
+//                                                                     
+static unsigned int sIrqGpioNum = 59; // Init number
+//                                                                   
 
 static void bcm2079x_init_stat(struct bcm2079x_dev *bcm2079x_dev)
 {
@@ -170,11 +175,19 @@ static irqreturn_t bcm2079x_dev_irq_handler(int irq, void *dev_id)
     struct bcm2079x_dev *bcm2079x_dev = dev_id;
     unsigned long flags;
 
-    // LGE_START byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+    //                                                                     
+    unsigned int irq_value = gpio_get_value(sIrqGpioNum);
+
+    if (irq_value == 0) {
+        dev_err(&bcm2079x_dev->client->dev,"%s, NFC IRQ == 0\n", __func__);
+        return 0;
+    }
+    //                                                                   
+
+    //                                                                          
     if (sPowerState == NFC_POWER_ON) {
         spin_lock_irqsave(&bcm2079x_dev->irq_enabled_lock, flags);
         bcm2079x_dev->count_irq++;
-
         spin_unlock_irqrestore(&bcm2079x_dev->irq_enabled_lock, flags);
         wake_up(&bcm2079x_dev->read_wq);
         wake_lock(&nfc_wake_lock);
@@ -185,7 +198,7 @@ static irqreturn_t bcm2079x_dev_irq_handler(int irq, void *dev_id)
     else {
         dev_err(&bcm2079x_dev->client->dev,"%s, Unknown power state\n", __func__);
     }
-    // LGE_END byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+    //                                                                        
 
     return IRQ_HANDLED;
 }
@@ -199,12 +212,11 @@ static unsigned int bcm2079x_dev_poll(struct file *filp, poll_table *wait)
     poll_wait(filp, &bcm2079x_dev->read_wq, wait);
 
     spin_lock_irqsave(&bcm2079x_dev->irq_enabled_lock, flags);
-
     if (bcm2079x_dev->count_irq > 0)
     {
-        // LGE_START byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+        //                                                                          
         //bcm2079x_dev->count_irq--;
-        // LGE_END byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+        //                                                                        
         mask |= POLLIN | POLLRDNORM;
     }
     spin_unlock_irqrestore(&bcm2079x_dev->irq_enabled_lock, flags);
@@ -272,28 +284,20 @@ static ssize_t bcm2079x_dev_read(struct file *filp, char __user *buf,
         total = -EFAULT;
     }
 
-    // BRCM_START Add spin_lock
-    // LGE_START byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+    //                                                                          
     spin_lock_irqsave(&bcm2079x_dev->irq_enabled_lock, flags);
     if (bcm2079x_dev->count_irq > 0) {
         bcm2079x_dev->count_irq--;
-        spin_unlock_irqrestore(&bcm2079x_dev->irq_enabled_lock, flags);
     }
     else {
-        spin_unlock_irqrestore(&bcm2079x_dev->irq_enabled_lock, flags);
         dev_err(&bcm2079x_dev->client->dev, "Invalid IRQ\n");
     }
-    // LGE_END byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
-    // BRCM_END Add spin_lock
-    spin_lock_irqsave(&bcm2079x_dev->irq_enabled_lock, flags);
+    //                                                                        
+
     if (bcm2079x_dev->count_irq == 0) {
-        spin_unlock_irqrestore(&bcm2079x_dev->irq_enabled_lock, flags);
         wake_unlock(&nfc_wake_lock);
     }
-    else {
-        spin_unlock_irqrestore(&bcm2079x_dev->irq_enabled_lock, flags);
-    }
-
+    spin_unlock_irqrestore(&bcm2079x_dev->irq_enabled_lock, flags);
     return total;
 }
 
@@ -349,9 +353,9 @@ static long bcm2079x_dev_unlocked_ioctl(struct file *filp,
                      unsigned int cmd, unsigned long arg)
 {
     struct bcm2079x_dev *bcm2079x_dev = filp->private_data;
-    // LGE_START byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+    //                                                                          
     unsigned long flags;
-    // LGE_END byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+    //                                                                        
 
     switch (cmd) {
     case BCMNFC_READ_FULL_PACKET:
@@ -364,7 +368,7 @@ static long bcm2079x_dev_unlocked_ioctl(struct file *filp,
              arg);
         return change_client_addr(bcm2079x_dev, arg);
     case BCMNFC_POWER_CTL:
-        // LGE_START byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+        //                                                                          
         gpio_set_value(bcm2079x_dev->en_gpio, arg);
 
         //dev_info(&bcm2079x_dev->client->dev,"BCMNFC_POWER_CTL (%x, %lx):\n", cmd, arg);
@@ -386,7 +390,7 @@ static long bcm2079x_dev_unlocked_ioctl(struct file *filp,
             spin_unlock_irqrestore(&bcm2079x_dev->irq_enabled_lock, flags);
         }
         //dev_info(&bcm2079x_dev->client->dev,"count_irq = %d\n", bcm2079x_dev->count_irq);
-        // LGE_END byunggu.kang@lge.com 2013-07-21 Modify for IRQ Exception Handle
+        //                                                                        
         break;
     case BCMNFC_WAKE_CTL:
         gpio_set_value(bcm2079x_dev->wake_gpio, arg);
@@ -417,7 +421,7 @@ static int bcm2079x_probe(struct i2c_client *client,
                const struct i2c_device_id *id)
 {
     int ret;
-    /* LGE_CHANGE_S, [NFC][wongab.jeon@lge.com], 2013-02-13, NFC Bring up */
+    /*                                                                    */
     //struct bcm2079x_platform_data *platform_data = NULL;
     //struct bcm2079x_dev *bcm2079x_dev = NULL;
 
@@ -428,6 +432,9 @@ static int bcm2079x_probe(struct i2c_client *client,
         platform_data.irq_gpio = of_get_named_gpio_flags(client->dev.of_node, "bcm,gpio_irq", 0, NULL);
         platform_data.en_gpio = of_get_named_gpio_flags(client->dev.of_node, "bcm,gpio_ven", 0, NULL);
         platform_data.wake_gpio = of_get_named_gpio_flags(client->dev.of_node, "bcm,gpio_mode", 0, NULL);
+        //                                                                     
+        sIrqGpioNum = platform_data.irq_gpio;
+        //                                                                   
     }
     else{
         dev_err(&client->dev, "nfc probe of_node fail\n");
@@ -447,7 +454,7 @@ static int bcm2079x_probe(struct i2c_client *client,
         return -ENODEV;
     }
     */
-    /* LGE_CHANGE_E, [NFC][wongab.jeon@lge.com], 2013-02-13, NFC Bring up */
+    /*                                                                    */
 
     ret = gpio_request_one(platform_data.irq_gpio, GPIOF_IN, "nfc_int");
     if (ret)
@@ -498,12 +505,9 @@ static int bcm2079x_probe(struct i2c_client *client,
      */
     dev_info(&client->dev, "requesting IRQ %d\n", client->irq);
     bcm2079x_dev.irq_enabled = true;
-
-	//Applying Level Trigger @ david.lim - 2013.11.12
-    //dev_err(&client->dev, "## Edge Trigger used ## - %s", __func__);
     ret = request_irq(client->irq, bcm2079x_dev_irq_handler,
-			  IRQF_TRIGGER_RISING|IRQF_NO_SUSPEND, client->name, &bcm2079x_dev);
-	
+                      IRQF_TRIGGER_RISING|IRQF_NO_SUSPEND, client->name, &bcm2079x_dev);
+
     if (ret) {
         dev_err(&client->dev, "request_irq failed\n");
         goto err_request_irq_failed;
@@ -579,9 +583,9 @@ static void __exit bcm2079x_dev_exit(void)
 }
 module_exit(bcm2079x_dev_exit);
 
-/* LGE_CHANGE_S, [NFC][wongab.jeon@lge.com], 2013-02-13, NFC Bring up */
+/*                                                                    */
 MODULE_DEVICE_TABLE(i2c, bcm2079x_id);
-/* LGE_CHANGE_S, [NFC][wongab.jeon@lge.com], 2013-02-13, NFC Bring up */
+/*                                                                    */
 MODULE_AUTHOR("Broadcom");
 MODULE_DESCRIPTION("NFC bcm2079x driver");
 MODULE_LICENSE("GPL");

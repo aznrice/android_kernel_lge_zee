@@ -4,6 +4,7 @@
  *  Copyright (C)  2001 Russell King
  *            (C)  2003 Venkatesh Pallipadi <venkatesh.pallipadi@intel.com>.
  *                      Jun Nakajima <jun.nakajima@intel.com>
+ *            (c)  2013 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -148,6 +149,7 @@ static struct dbs_tuners {
 	unsigned int sampling_down_factor;
 	int          powersave_bias;
 	unsigned int io_is_busy;
+	unsigned int input_boost;
 	unsigned int optimal_max_freq;
 	unsigned int middle_grid_step;
 	unsigned int high_grid_step;
@@ -169,11 +171,12 @@ static struct dbs_tuners {
 	.powersave_bias = 0,
 	.sync_freq = 0,
 	.optimal_freq = 0,
+	.input_boost = 0,
 	.optimal_max_freq = DEF_OPTIMAL_FREQ,
 	.debug_mask=0,
 };
 
-#if defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_KDDI) || defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#if defined (CONFIG_MACH_MSM8974_B1_KR) || defined (CONFIG_MACH_MSM8974_Z_KR)|| defined(CONFIG_MACH_MSM8974_B1W)
 extern int boost_freq;
 #endif
 
@@ -336,6 +339,7 @@ show_one(up_threshold_multi_core, up_threshold_multi_core);
 show_one(down_differential, down_differential);
 show_one(sampling_down_factor, sampling_down_factor);
 show_one(ignore_nice_load, ignore_nice);
+show_one(down_differential_multi_core, down_differential_multi_core);
 show_one(optimal_freq, optimal_freq);
 show_one(up_threshold_any_cpu_load, up_threshold_any_cpu_load);
 show_one(middle_grid_step, middle_grid_step);
@@ -343,6 +347,7 @@ show_one(high_grid_step, high_grid_step);
 show_one(middle_grid_load, middle_grid_load);
 show_one(high_grid_load, high_grid_load);
 show_one(sync_freq, sync_freq);
+show_one(input_boost, input_boost);
 show_one(optimal_max_freq, optimal_max_freq);
 show_one(debug_mask,debug_mask);
 
@@ -422,6 +427,18 @@ static ssize_t store_sampling_rate(struct kobject *a, struct attribute *b,
 	return count;
 }
 
+static ssize_t store_input_boost(struct kobject *a, struct attribute *b,
+				const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+	if (ret != 1)
+		return -EINVAL;
+	dbs_tuners_ins.input_boost = input;
+	return count;
+}
+
 static ssize_t store_sync_freq(struct kobject *a, struct attribute *b,
 				   const char *buf, size_t count)
 {
@@ -447,6 +464,20 @@ static ssize_t store_io_is_busy(struct kobject *a, struct attribute *b,
 	dbs_tuners_ins.io_is_busy = !!input;
 	return count;
 }
+
+static ssize_t store_down_differential_multi_core(struct kobject *a,
+			struct attribute *b, const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+
+	ret = sscanf(buf, "%u", &input);
+	if (ret != 1)
+		return -EINVAL;
+	dbs_tuners_ins.down_differential_multi_core = input;
+	return count;
+}
+
 
 static ssize_t store_optimal_freq(struct kobject *a, struct attribute *b,
 				   const char *buf, size_t count)
@@ -714,10 +745,13 @@ static ssize_t store_powersave_bias(struct kobject *a, struct attribute *b,
 
 				cpumask_set_cpu(cpu, &cpus_timer_done);
 				if (dbs_info->cur_policy) {
+					dbs_timer_exit(dbs_info);
 					/* restart dbs timer */
+					mutex_lock(&dbs_info->timer_mutex);
 					dbs_timer_init(dbs_info);
 					/* Enable frequency synchronization
 					 * of CPUs */
+					mutex_unlock(&dbs_info->timer_mutex);
 					atomic_set(&dbs_info->sync_enabled, 1);
 				}
 skip_this_cpu:
@@ -781,9 +815,11 @@ define_one_global_rw(sampling_down_factor);
 define_one_global_rw(ignore_nice_load);
 define_one_global_rw(powersave_bias);
 define_one_global_rw(up_threshold_multi_core);
+define_one_global_rw(down_differential_multi_core);
 define_one_global_rw(optimal_freq);
 define_one_global_rw(up_threshold_any_cpu_load);
 define_one_global_rw(sync_freq);
+define_one_global_rw(input_boost);
 define_one_global_rw(optimal_max_freq);
 define_one_global_rw(middle_grid_step);
 define_one_global_rw(high_grid_step);
@@ -801,10 +837,12 @@ static struct attribute *dbs_attributes[] = {
 	&powersave_bias.attr,
 	&io_is_busy.attr,
 	&up_threshold_multi_core.attr,
+	&down_differential_multi_core.attr,
 	&optimal_freq.attr,
 	&optimal_max_freq.attr,
 	&up_threshold_any_cpu_load.attr,
 	&sync_freq.attr,
+	&input_boost.attr,
 	&middle_grid_step.attr,
 	&high_grid_step.attr,
 	&middle_grid_load.attr,
@@ -957,10 +995,11 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 
 	cpufreq_notify_utilization(policy, load_at_max_freq);
 
-#if defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_KDDI) || defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#if defined (CONFIG_MACH_MSM8974_B1_KR) || defined (CONFIG_MACH_MSM8974_Z_KR)|| defined(CONFIG_MACH_MSM8974_B1W)
 	if (boost_freq == 2) {
-		if(policy->cur < policy->max)
+		if(policy->cur < policy->max){
 			dbs_freq_increase(policy, policy->max);
+		}
 		return;
 	}
 #endif
@@ -1110,14 +1149,8 @@ static inline void dbs_timer_init(struct cpu_dbs_info_s *dbs_info)
 		delay -= jiffies % delay;
 
 	dbs_info->sample_type = DBS_NORMAL_SAMPLE;
-	mutex_lock(&dbs_info->timer_mutex);
-	if (delayed_work_pending(&dbs_info->work)) {
-		printk(KERN_WARNING "work is pending : cpu(%d)\n", dbs_info->cpu);
-		mutex_unlock(&dbs_info->timer_mutex);
-		return;
-	}
+	INIT_DELAYED_WORK_DEFERRABLE(&dbs_info->work, do_dbs_timer);
 	queue_delayed_work_on(dbs_info->cpu, dbs_wq, &dbs_info->work, delay);
-	mutex_unlock(&dbs_info->timer_mutex);
 }
 
 static inline void dbs_timer_exit(struct cpu_dbs_info_s *dbs_info)
@@ -1154,10 +1187,7 @@ static void dbs_refresh_callback(struct work_struct *work)
 	struct cpu_dbs_info_s *this_dbs_info;
 	struct dbs_work_struct *dbs_work;
 	unsigned int cpu;
-#ifdef CONFIG_MACH_MSM8974_G2_DCM
-	extern int boo;
-	int def_touch_boost_freq = 2265600;
-#endif
+	unsigned int target_freq;
 
 	dbs_work = container_of(work, struct dbs_work_struct, work);
 	cpu = dbs_work->cpu;
@@ -1174,53 +1204,23 @@ static void dbs_refresh_callback(struct work_struct *work)
 		goto bail_incorrect_governor;
 	}
 
-#ifdef CONFIG_MACH_MSM8974_G2_DCM
-	if(boo) {
-	    def_touch_boost_freq = 1190400;
-	} else {
-	    def_touch_boost_freq = 1574400;
-	}
+	if (dbs_tuners_ins.input_boost)
+		target_freq = dbs_tuners_ins.input_boost;
+	else
+		target_freq = policy->max;
 
-	if (policy->cur <= policy->max) {
-		if (policy->max >= def_touch_boost_freq) {
-			/*
-			 * Arch specific cpufreq driver may fail.
-			 * Don't update governor frequency upon failure.
-			 */
-			if (__cpufreq_driver_target(policy, def_touch_boost_freq,
-						CPUFREQ_RELATION_L) >= 0)
-				policy->cur = def_touch_boost_freq;
-
-			this_dbs_info->prev_cpu_idle = get_cpu_idle_time(cpu,
-					&this_dbs_info->prev_cpu_wall);
-		}
-		else {
-			/*
-			 * Arch specific cpufreq driver may fail.
-			 * Don't update governor frequency upon failure.
-			 */
-			if (__cpufreq_driver_target(policy, policy->max,
-						CPUFREQ_RELATION_L) >= 0)
-				policy->cur = policy->max;
-
-			this_dbs_info->prev_cpu_idle = get_cpu_idle_time(cpu,
-					&this_dbs_info->prev_cpu_wall);
-		}
-	}
-#else
-	if (policy->cur < policy->max) {
+	if (policy->cur < target_freq) {
 		/*
 		 * Arch specific cpufreq driver may fail.
 		 * Don't update governor frequency upon failure.
 		 */
-		if (__cpufreq_driver_target(policy, policy->max,
+		if (__cpufreq_driver_target(policy, target_freq,
 					CPUFREQ_RELATION_L) >= 0)
-			policy->cur = policy->max;
+			policy->cur = target_freq;
 
 		this_dbs_info->prev_cpu_idle = get_cpu_idle_time(cpu,
 				&this_dbs_info->prev_cpu_wall);
 	}
-#endif
 
 bail_incorrect_governor:
 	unlock_policy_rwsem_write(cpu);
@@ -1230,7 +1230,7 @@ bail_acq_sema_failed:
 	return;
 }
 
-#if 0 //Fix build error
+
 static int dbs_migration_notify(struct notifier_block *nb,
 				unsigned long target_cpu, void *arg)
 {
@@ -1246,7 +1246,6 @@ static int dbs_migration_notify(struct notifier_block *nb,
 static struct notifier_block dbs_migration_nb = {
 	.notifier_call = dbs_migration_notify,
 };
-#endif
 
 static int sync_pending(struct cpu_dbs_info_s *this_dbs_info)
 {
@@ -1347,10 +1346,13 @@ static void dbs_input_event(struct input_handle *handle, unsigned int type,
 		return;
 	}
 
-#if defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_KDDI) || defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#if defined (CONFIG_MACH_MSM8974_B1_KR) || defined (CONFIG_MACH_MSM8974_Z_KR)|| defined(CONFIG_MACH_MSM8974_B1W)
 	if (boost_freq == 1) {
-		if (!strcmp((char*)(handle->dev->name), "qpnp_pon"))
+		if (!strcmp((char*)(handle->dev->name), "qpnp_pon")){
+			printk(KERN_ERR "ws->name=%s, boost_Freq=%d\n", handle->dev->name, boost_freq);
 			boost_freq++;
+			printk(KERN_ERR "ws->name=%s, boost_Freq=%d\n", handle->dev->name, boost_freq);
+		}
 	}
 #endif
 	for_each_online_cpu(i)
@@ -1395,7 +1397,28 @@ static void dbs_input_disconnect(struct input_handle *handle)
 }
 
 static const struct input_device_id dbs_ids[] = {
-	{ .driver_info = 1 },
+	/* multi-touch touchscreen */
+	{
+		.flags = INPUT_DEVICE_ID_MATCH_EVBIT |
+			INPUT_DEVICE_ID_MATCH_ABSBIT,
+		.evbit = { BIT_MASK(EV_ABS) },
+		.absbit = { [BIT_WORD(ABS_MT_POSITION_X)] =
+			BIT_MASK(ABS_MT_POSITION_X) |
+			BIT_MASK(ABS_MT_POSITION_Y) },
+	},
+	/* touchpad */
+	{
+		.flags = INPUT_DEVICE_ID_MATCH_KEYBIT |
+			INPUT_DEVICE_ID_MATCH_ABSBIT,
+		.keybit = { [BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH) },
+		.absbit = { [BIT_WORD(ABS_X)] =
+			BIT_MASK(ABS_X) | BIT_MASK(ABS_Y) },
+	},
+	/* Keypad */
+	{
+		.flags = INPUT_DEVICE_ID_MATCH_EVBIT,
+		.evbit = { BIT_MASK(EV_KEY) },
+	},
 	{ },
 };
 
@@ -1474,6 +1497,9 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 			if (dbs_tuners_ins.sync_freq == 0)
 				dbs_tuners_ins.sync_freq = policy->min;
+
+			atomic_notifier_chain_register(&migration_notifier_head,
+					&dbs_migration_nb);
 		}
 		if (!cpu)
 			rc = input_register_handler(&dbs_input_handler);
@@ -1504,9 +1530,14 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		this_dbs_info->cur_policy = NULL;
 		if (!cpu)
 			input_unregister_handler(&dbs_input_handler);
-		if (!dbs_enable)
+		if (!dbs_enable) {
 			sysfs_remove_group(cpufreq_global_kobject,
 					   &dbs_attr_group);
+			atomic_notifier_chain_unregister(
+				&migration_notifier_head,
+				&dbs_migration_nb);
+		}
+
 		mutex_unlock(&dbs_mutex);
 
 		break;
@@ -1574,8 +1605,6 @@ static int __init cpufreq_gov_dbs_init(void)
 		mutex_init(&this_dbs_info->timer_mutex);
 		INIT_WORK(&dbs_work->work, dbs_refresh_callback);
 		dbs_work->cpu = i;
-
-		INIT_DELAYED_WORK_DEFERRABLE(&this_dbs_info->work, do_dbs_timer);
 
 		atomic_set(&this_dbs_info->src_sync_cpu, -1);
 		init_waitqueue_head(&this_dbs_info->sync_wq);

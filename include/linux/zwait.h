@@ -113,7 +113,6 @@ union zw_pwrkey_info {
 extern int zw_notifier_chain_register(struct notifier_block *nb, void *ptr);
 extern int zw_notifier_chain_unregister(struct notifier_block *nb);
 extern int is_zw_mode(void);
-extern int zw_keep_uart_console(void);
 
 /* pwrkey */
 extern void zw_pwrkey_info_register(void *ptr);
@@ -137,10 +136,6 @@ extern int zw_no_charger_in_zwait(void);
 /* rtc */
 extern int zw_rtc_info_register(struct rtc_device *rtc);
 extern void zw_rtc_info_unregister(struct rtc_device *rtc);
-
-/* irqs */
-extern void zw_irqs_info_register(unsigned int irq, int wakeup);
-extern void zw_irqs_info_unregister(unsigned int irq);
 
 #else /* !CONFIG_ZERO_WAIT */
 
@@ -219,16 +214,6 @@ static inline int zw_rtc_info_register(struct rtc_device *rtc)
 	return 0;
 }
 static inline void zw_rtc_info_unregister(struct rtc_device *rtc)
-{
-	return;
-}
-
-/* irqs */
-static inline void zw_irqs_info_register(unsigned int irq, int wakeup)
-{
-	return;
-}
-static inline void zw_irqs_info_unregister(unsigned int irq)
 {
 	return;
 }

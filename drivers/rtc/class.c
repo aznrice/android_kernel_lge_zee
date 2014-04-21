@@ -21,6 +21,9 @@
 
 #include "rtc-core.h"
 
+#if defined (CONFIG_MACH_LGE)
+#include <linux/debugfs.h>
+#endif
 
 static DEFINE_IDA(rtc_ida);
 struct class *rtc_class;
@@ -78,6 +81,10 @@ static int rtc_suspend(struct device *dev, pm_message_t mesg)
 	return 0;
 }
 
+#if defined (CONFIG_MACH_LGE)
+char resume_time[] = "01-01 00:00:00.000";
+#endif
+
 static int rtc_resume(struct device *dev)
 {
 	struct rtc_device	*rtc = to_rtc_device(dev);
@@ -85,6 +92,21 @@ static int rtc_resume(struct device *dev)
 	struct timespec		new_system, new_rtc;
 	struct timespec		sleep_time;
 
+#if defined (CONFIG_MACH_LGE)
+	struct timespec		time;
+	struct tm		tmresult;
+
+	time = __current_kernel_time();
+	time_to_tm(time.tv_sec,sys_tz.tz_minuteswest * 60* (-1),&tmresult);
+	sprintf(resume_time, "%02d-%02d %02d:%02d:%02d.%03lu\n",
+			tmresult.tm_mon+1,
+			tmresult.tm_mday,
+			tmresult.tm_hour,
+			tmresult.tm_min,
+			tmresult.tm_sec,
+			(unsigned long) time.tv_nsec/1000000);
+	printk(KERN_ERR "resume_time:%s\n", resume_time);
+#endif
 	if (strcmp(dev_name(&rtc->dev), CONFIG_RTC_HCTOSYS_DEVICE) != 0)
 		return 0;
 
@@ -253,6 +275,25 @@ void rtc_device_unregister(struct rtc_device *rtc)
 }
 EXPORT_SYMBOL_GPL(rtc_device_unregister);
 
+#if defined (CONFIG_MACH_LGE)
+static struct dentry *debugfs_resume_time;
+static int resume_time_show(struct seq_file *m, void *unused)
+{
+	return seq_printf(m, "%s\n", resume_time);
+}
+
+static int resume_time_open(struct inode *inode, struct file *file)
+{
+        return single_open(file, resume_time_show, NULL);
+}
+
+static const struct file_operations resume_time_fops = {
+	.open		= resume_time_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+};
+#endif
+
 static int __init rtc_init(void)
 {
 	rtc_class = class_create(THIS_MODULE, "rtc");
@@ -264,6 +305,9 @@ static int __init rtc_init(void)
 	rtc_class->resume = rtc_resume;
 	rtc_dev_init();
 	rtc_sysfs_init(rtc_class);
+#if defined (CONFIG_MACH_LGE)
+	debugfs_resume_time = debugfs_create_file("resume_time", S_IRUGO, NULL, NULL, &resume_time_fops);
+#endif
 	return 0;
 }
 

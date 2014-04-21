@@ -162,7 +162,7 @@ unsigned char TRX_Open[7] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00} ;
 unsigned char TRX_Gnd[7] = {0xff,0xff,0xff,0xff,0x3,0xff,0xfc} ;
 unsigned char TRX_Short[7] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00} ;
 int HighResistanceLowerLimit[3] = {-1000, -1000, -400};
-#ifdef CONFIG_MACH_MSM8974_G2_OPEN_COM
+#if defined (CONFIG_MACH_MSM8974_G2_OPEN_COM) || defined (CONFIG_MACH_MSM8974_G2_OPT_AU)
 int HighResistanceUpperLimit[3] = {450, 500, 200};
 #else
 int HighResistanceUpperLimit[3] = {450, 450, 200};
@@ -457,34 +457,34 @@ int CompareImageReport(void)
 				}
 			} else {
 #endif
-				if ((ImagepF[i][j] < LowerImageLimit[i][j]) || (ImagepF[i][j] > UpperImageLimit[i][j]))	{
-					if(f54_window_crack_check_mode) {
-						if (ImagepF[i][j] < 300){
-							rx_crack_count++;
-							node_crack_count++;
-						}
-						else row_crack_count = 0;
-
-						if (F12_2DTxCount<=rx_crack_count) row_crack_count++;
-
-						if (2<row_crack_count){
-							f54_window_crack = 1;
-							break;
-						}
-
-						if((int)(F12_2DTxCount*F12_2DRxCount*20/100)<node_crack_count) {
-							result = false;
-							f54_window_crack = 1;
-							break;
-						}
-
-						printk("[Touch] Tx [%d] Rx [%d] node_crack_count %d, row_crack_count %d, raw cap %d\n",i, j,node_crack_count,row_crack_count, ImagepF[i][j]);
+			if ((ImagepF[i][j] < LowerImageLimit[i][j]) || (ImagepF[i][j] > UpperImageLimit[i][j]))	{
+				if(f54_window_crack_check_mode) {
+					if (ImagepF[i][j] < 300){
+						rx_crack_count++;
+						node_crack_count++;
 					}
-					else {
-						//printf("Failed: 2D area: Tx [%d] Rx [%d]\n",i, j);
-						outbuf += sprintf(f54_wlog_buf+outbuf, "FAIL, %d,%d,%d\n", i, j, ImagepF[i][j]);
-						result = false;
+					else row_crack_count = 0;
+
+					if (F12_2DTxCount<=rx_crack_count) row_crack_count++;
+
+					if (2<row_crack_count){
+						f54_window_crack = 1;
 						break;
+					}
+
+					if((int)(F12_2DTxCount*F12_2DRxCount*20/100)<node_crack_count) {
+						result = false;
+						f54_window_crack = 1;
+						break;
+					}
+
+					printk("[Touch] Tx [%d] Rx [%d] node_crack_count %d, row_crack_count %d, raw cap %d\n",i, j,node_crack_count,row_crack_count, ImagepF[i][j]);
+				}
+				else {
+					//printf("Failed: 2D area: Tx [%d] Rx [%d]\n",i, j);
+					outbuf += sprintf(f54_wlog_buf+outbuf, "FAIL, %d,%d,%d\n", i, j, ImagepF[i][j]);
+					result = false;
+					break;
 					}
 				}
 #if defined(CONFIG_LGE_Z_TOUCHSCREEN)

@@ -17,6 +17,8 @@
 #include <linux/gfp.h>
 #include <linux/suspend.h>
 
+#include <trace/events/sched.h>
+
 #ifdef CONFIG_SMP
 /* Serializes the updates to cpu_online_mask, cpu_present_mask */
 static DEFINE_MUTEX(cpu_add_remove_lock);
@@ -75,6 +77,10 @@ void put_online_cpus(void)
 	if (cpu_hotplug.active_writer == current)
 		return;
 	mutex_lock(&cpu_hotplug.lock);
+
+	if (WARN_ON(!cpu_hotplug.refcount))
+		cpu_hotplug.refcount++; /* try to fix things up */
+
 	if (!--cpu_hotplug.refcount && unlikely(cpu_hotplug.active_writer))
 		wake_up_process(cpu_hotplug.active_writer);
 	mutex_unlock(&cpu_hotplug.lock);
@@ -264,6 +270,7 @@ static int __ref _cpu_down(unsigned int cpu, int tasks_frozen)
 
 out_release:
 	cpu_hotplug_done();
+	trace_sched_cpu_hotplug(cpu, err, 0);
 	if (!err)
 		cpu_notify_nofail(CPU_POST_DEAD | mod, hcpu);
 	return err;
@@ -321,6 +328,7 @@ out_notify:
 	if (ret != 0)
 		__cpu_notify(CPU_UP_CANCELED | mod, hcpu, nr_calls, NULL);
 	cpu_hotplug_done();
+	trace_sched_cpu_hotplug(cpu, ret, 1);
 
 	return ret;
 }
@@ -440,7 +448,7 @@ void __weak arch_enable_nonboot_cpus_end(void)
 {
 }
 
-#if defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_KDDI) || defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#if defined (CONFIG_MACH_MSM8974_B1_KR) || defined (CONFIG_MACH_MSM8974_Z_KR)|| defined(CONFIG_MACH_MSM8974_B1W)
 #define BOOST_FREQ_TIME_MS 2000
 static struct timer_list boost_freq_timer;
 int boost_freq = 0;
@@ -454,7 +462,7 @@ static void boost_freq_timer_cb(unsigned long data)
 void __ref enable_nonboot_cpus(void)
 {
 	int cpu, error;
-#if defined(CONFIG_MACH_MSM8974_Z_KR) || defined(CONFIG_MACH_MSM8974_Z_KDDI) || defined(CONFIG_MACH_MSM8974_Z_US) || defined(CONFIG_MACH_MSM8974_Z_OPEN_COM)
+#if defined (CONFIG_MACH_MSM8974_B1_KR) || defined (CONFIG_MACH_MSM8974_Z_KR)|| defined(CONFIG_MACH_MSM8974_B1W)
 	static int first = 0;
 
 	if (!first) {

@@ -10,6 +10,7 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
+#define DEBUG
 #define CONFIG_HRTIMER_SLEEP_DELAYED
 
 #include <linux/module.h>
@@ -218,7 +219,6 @@ enum {
 	ES325_TWO_MIC_FT_VOLTE,
 	ES325_TWO_MIC_CT_VOIP,
 	ES325_TWO_MIC_FT_VOIP,
-	ES325_TWO_MIC_CT_VEQ,
 	ES325_ONE_MIC_HEADSET,
 	ES325_ONE_CH_MUSIC_PLAYBACK,
 	ES325_TWO_CH_MUSIC_PLAYBACK,
@@ -301,11 +301,6 @@ static u8 es325_internal_route_configs[ES325_STOP+1][60] = {
 	0x90, 0x31, 0x00, 0x03, /* Route Preset */
 	0x90, 0x31, 0x00, 0x29, /* Algo Preset */
 	0xff					/* End of Command */
-	},
-	{ // ES325_TWO_MIC_CT_VEQ,
-	0x90, 0x31, 0x00, 0x01,
-	0x90, 0x31, 0x00, 0x1B,
-	0xff
 	},
 	{ // ES325_ONE_MIC_HEADSET 1-Mic Headset
 	0x90, 0x31, 0x00, 0x04, /* Route Preset */
@@ -1170,7 +1165,7 @@ static int es325_slim_read(struct es325_priv *es325, unsigned int offset,
 		mdelay(ES325_RD_POLL_INTV);
 	}
 	if (try >= ES325_RD_POLL_MAX && memcmp(buf, notready, 4) == 0) {
-		pr_err("%s: failed not ready after %d tries, rc=%d\n", __func__, try, rc);
+		pr_err("%s: failed not ready after %d tries\n", __func__, try);
 		rc = -EIO;
 	}
 
@@ -2535,6 +2530,9 @@ static int es325_put_control_value(struct snd_kcontrol *kcontrol,
 	unsigned int value;
 	int rc = 0;
 
+	if(!is_fw_download)
+		return 0;
+
 	pr_debug("%s(): reg = %d\n", __func__, reg);
 	pr_debug("%s(): shift = %d\n", __func__, shift);
 	pr_debug("%s(): max = %d\n", __func__, max);
@@ -2557,6 +2555,9 @@ static int es325_get_control_value(struct snd_kcontrol *kcontrol,
 	unsigned int max = mc->max;
 	unsigned int invert = mc->invert;
 	unsigned int value;
+
+	if(!is_fw_download)
+		return 0;
 
 	pr_debug("%s(): reg = %d\n", __func__, reg);
 	pr_debug("%s(): shift = %d\n", __func__, shift);
@@ -2581,6 +2582,9 @@ static int es325_put_control_enum(struct snd_kcontrol *kcontrol,
 	unsigned int value;
 	int rc = 0;
 
+	if(!is_fw_download)
+		return 0;
+
 	pr_debug("%s(): reg = 0x%x\n", __func__, reg);
 	pr_debug("%s(): max = %d\n", __func__, max);
 	pr_debug("%s(): value.integer.value[0] = %ld\n", __func__,
@@ -2598,6 +2602,9 @@ static int es325_get_control_enum(struct snd_kcontrol *kcontrol,
 		(struct soc_enum *)kcontrol->private_value;
 	unsigned int reg = e->reg;
 	unsigned int value;
+
+	if(!is_fw_download)
+		return 0;
 
 	pr_debug("%s(): reg = 0x%x\n", __func__, reg);
 	value = es325_read(NULL, reg);
@@ -2721,7 +2728,7 @@ static int es325_put_internal_route_config(struct snd_kcontrol *kcontrol,
 
 	route_num = ucontrol->value.integer.value[0];
 
-	pr_info("%s(): route_num = %s es325_internal_route_num = %s\n",
+	pr_debug("%s(): route_num = %s es325_internal_route_num = %s\n",
 			__func__, es325_internal_route_configs_text[route_num],
 			es325_internal_route_configs_text[es325_internal_route_num]);
 
@@ -2774,10 +2781,10 @@ static int es325_put_internal_route_config(struct snd_kcontrol *kcontrol,
 	if(es325_internal_route_num != route_num) {
 		es325_internal_route_num = route_num_old = route_num;
 		/* Flag to setup slimbus channel for es325 */
-		/* jeremy.pi@lge.com
-		*   blocked ch mapping flag
-		*   controled by UCM
-		*/
+		/*                  
+                             
+                      
+  */
 //		es325_rx1_route_ena = 1;
 //		es325_tx1_route_ena = 1;
 //		es325_rx2_route_ena = 1;
@@ -2852,6 +2859,9 @@ static int es325_put_dereverb_gain_value(struct snd_kcontrol *kcontrol,
 	unsigned int value;
 	int rc = 0;
 
+	if(!is_fw_download)
+		return 0;
+
 	if (ucontrol->value.integer.value[0] <= 12) {
 		pr_debug("%s() ucontrol = %ld\n", __func__,
 			ucontrol->value.integer.value[0]);
@@ -2871,6 +2881,9 @@ static int es325_get_dereverb_gain_value(struct snd_kcontrol *kcontrol,
 	unsigned int reg = mc->reg;
 	unsigned int value;
 
+	if(!is_fw_download)
+		return 0;
+
 	value = es325_read(NULL, reg);
 	pr_debug("%s() value = %d\n", __func__, value);
 	ucontrol->value.integer.value[0] = es325_gain_to_index(-12, 1, value);
@@ -2889,6 +2902,9 @@ static int es325_put_bwe_high_band_gain_value(struct snd_kcontrol *kcontrol,
 	unsigned int reg = mc->reg;
 	unsigned int value;
 	int rc = 0;
+
+	if(!is_fw_download)
+		return 0;
 
 	if (ucontrol->value.integer.value[0] <= 30) {
 		pr_debug("%s() ucontrol = %ld\n", __func__,
@@ -2910,6 +2926,9 @@ static int es325_get_bwe_high_band_gain_value(struct snd_kcontrol *kcontrol,
 	unsigned int reg = mc->reg;
 	unsigned int value;
 
+	if(!is_fw_download)
+		return 0;
+
 	value = es325_read(NULL, reg);
 	pr_debug("%s() value = %d\n", __func__, value);
 	ucontrol->value.integer.value[0] = es325_gain_to_index(-10, 1, value);
@@ -2928,6 +2947,9 @@ static int es325_put_bwe_max_snr_value(struct snd_kcontrol *kcontrol,
 	unsigned int reg = mc->reg;
 	unsigned int value;
 	int rc = 0;
+
+	if(!is_fw_download)
+		return 0;
 
 	if (ucontrol->value.integer.value[0] <= 70) {
 		pr_debug("%s() ucontrol = %ld\n", __func__,
@@ -2948,6 +2970,9 @@ static int es325_get_bwe_max_snr_value(struct snd_kcontrol *kcontrol,
 		(struct soc_mixer_control *)kcontrol->private_value;
 	unsigned int reg = mc->reg;
 	unsigned int value;
+
+	if(!is_fw_download)
+		return 0;
 
 	value = es325_read(NULL, reg);
 	pr_debug("%s() value = %d\n", __func__, value);
@@ -3033,7 +3058,6 @@ static const char *es325_internal_route_configs_text[ES325_STOP+1] = {
 	"TWO MIC FT VOLTE",		/* ES325_TWO_MIC_FT_VOLTE */
 	"TWO MIC CT VOIP",		/* ES325_TWO_MIC_CT_VOIP */
 	"TWO MIC FT VOIP",		/* ES325_TWO_MIC_FT_VOIP */
-	"TWO MIC CT VEQ",		/* ES325_TWO_MIC_CT_VEQ */
 	"ONE MIC HEADSET",		/* ES325_ONE_MIC_HEADSET */
 	"ONE CH MUSIC PLAYBACK",		/* ES325_ONE_CH_MUSIC_PLAYBACK */
 	"TWO CH MUSIC PLAYBACK",	/* ES325_TWO_CH_MUSIC_PLAYBACK */
@@ -3075,6 +3099,9 @@ static int es325_put_digital_gain_value(struct snd_kcontrol *kcontrol,
 	unsigned int value;
 	int rc = 0;
 
+	if(!is_fw_download)
+		return 0;
+
 	pr_debug("%s() ucontrol = %ld\n", __func__,
 		ucontrol->value.integer.value[0]);
 	value = ucontrol->value.integer.value[0];
@@ -3090,6 +3117,9 @@ static int es325_get_digital_gain_value(struct snd_kcontrol *kcontrol,
 		(struct soc_mixer_control *)kcontrol->private_value;
 	unsigned int reg = mc->reg;
 	unsigned int value;
+
+	if(!is_fw_download)
+		return 0;
 
 	value = es325_read(NULL, reg);
 	pr_debug("%s() value = %d\n", __func__, value);

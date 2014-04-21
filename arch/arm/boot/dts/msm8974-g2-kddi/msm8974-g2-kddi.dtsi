@@ -23,34 +23,34 @@
 
 / {
 	aliases {
-		serial0 = &blsp1_uart1; /* ttyHSL0 for Debug */
-		serial1 = &blsp2_uart5; /* ttyHSL1 for IrRC  */
-		serial3 = &blsp1_uart3; /* ttyHSL3 for IrDA  */
+		serial0 = &lge_blsp1_uart1; /* ttyHSL0 for Debug */
+		serial1 = &lge_blsp2_uart5; /* ttyHSL1 for IrRC  */
+		serial3 = &lge_blsp1_uart3; /* ttyHSL3 for IrDA  */
 	};
 };
 
 &soc {
 	i2c@f9967000 {
-		CXD2355AGG-i2c@2b {
+		snfc_cen@2b {
 			status = "ok";
 		};
 	};
 
-	blsp1_uart1: serial@f991d000 { /* Debug Uart */
+	lge_blsp1_uart1: serial@f991d000 { /* Debug Uart */
 		compatible = "qcom,msm-lsuart-v14";
 		reg = <0xf991d000 0x1000>;
 		interrupts = <0 107 0>;
 		status = "ok";
 	};
 	
-	blsp1_uart3: serial@f991f000 { /* IrDA Uart */
+	lge_blsp1_uart3: serial@f991f000 { /* IrDA Uart */
 		compatible = "qcom,msm-lsuart-v14";
 		reg = <0xf991f000 0x1000>;
 		interrupts = <0 109 0>;
 		status = "ok";
 	};
 
-	blsp2_uart5: serial@f9962000 { /* IrRC Uart */
+	lge_blsp2_uart5: serial@f9962000 { /* IrRC Uart */
 		compatible = "qcom,msm-lsuart-v14";
 		reg = <0xf9962000 0x1000>;
 		interrupts = <0 118 0>;
@@ -198,6 +198,7 @@
 		qcom,clk-rates = <400000 20000000 25000000 50000000 100000000>;
 		qcom,sup-voltages = <1800 2950>;
 		qcom,bus-width = <4>;
+		qcom,nonremovable;
 		qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50";
 
 		qcom,msm-bus,name = "sdcc3";

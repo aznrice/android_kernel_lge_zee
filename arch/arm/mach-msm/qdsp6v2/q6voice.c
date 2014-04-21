@@ -1294,7 +1294,6 @@ static int voice_send_start_voice_cmd(struct voice_data *v)
 				 msecs_to_jiffies(TIMEOUT_MS));
 	if (!ret) {
 		pr_err("%s: wait_event timeout\n", __func__);
-		<<KERNELPANIC>>
 		goto fail;
 	}
 

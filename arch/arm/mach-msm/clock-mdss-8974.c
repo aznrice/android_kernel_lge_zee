@@ -27,19 +27,12 @@
 #include "clock-mdss-8974.h"
 
 #define REG_R(addr)			readl_relaxed(addr)
-#ifdef CONFIG_MACH_LGE
-/* LGE_CHANGE
-* This is for auto pll patch from case#01156220
-* 2013-05-25, baryun.hwang@lge.com
-*/
-#define QCT_AUTO_PLL_PATCH
-#endif
 #define REG_W(data, addr)		writel_relaxed(data, addr)
 #define DSS_REG_W(base, offset, data)	REG_W((data), (base) + (offset))
 #define DSS_REG_R(base, offset)		REG_R((base) + (offset))
 
-#define GDSC_PHYS		0xFD8C2304
-#define GDSC_SIZE		0x4
+#define GDSC_PHYS		0xFD8C2300
+#define GDSC_SIZE		0x8
 
 #define DSI_PHY_PHYS		0xFD922A00
 #define DSI_PHY_SIZE		0x000000D4
@@ -174,7 +167,8 @@ static int mdss_gdsc_enabled(void)
 	if (!gdsc_base)
 		return 0;
 
-	return !!(readl_relaxed(gdsc_base) & BIT(31));
+	return (readl_relaxed(gdsc_base + 0x4) & BIT(31)) &&
+		(!(readl_relaxed(gdsc_base) & BIT(0)));
 }
 
 void hdmi_pll_disable(void)
@@ -737,7 +731,7 @@ int div_prepare(struct clk *c)
 {
 	struct div_clk *div = to_div_clk(c);
 	/* Restore the divider's value */
-	return div->ops->set_div(div, div->div);
+	return div->ops->set_div(div, div->data.div);
 }
 
 int mux_prepare(struct clk *c)
@@ -865,6 +859,17 @@ static int analog_get_div(struct div_clk *clk)
 	return div;
 }
 
+static void dsi_pll_toggle_lock_detect(void)
+{
+	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_LKDET_CFG2,
+		0x05);
+	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_LKDET_CFG2,
+		0x04);
+	udelay(1);
+	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_LKDET_CFG2,
+		0x05);
+}
+
 static int dsi_pll_lock_status(void)
 {
 	u32 status;
@@ -884,6 +889,12 @@ static int dsi_pll_lock_status(void)
 	}
 
 	return pll_locked;
+}
+
+static inline int dsi_pll_toggle_lock_detect_and_check_status(void)
+{
+	dsi_pll_toggle_lock_detect();
+	return dsi_pll_lock_status();
 }
 
 static void dsi_pll_software_reset(void)
@@ -917,18 +928,19 @@ static int dsi_pll_enable_seq_m(void)
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0f);
 	udelay(1000);
 
-	do {
-		pll_locked = dsi_pll_lock_status();
-		if (!pll_locked) {
+	pll_locked = dsi_pll_toggle_lock_detect_and_check_status();
+	for (i = 0; (i < 4) && !pll_locked; i++) {
+		DSS_REG_W(mdss_dsi_base,
+			DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x07);
+		if (i != 0)
 			DSS_REG_W(mdss_dsi_base,
-				DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x07);
-			udelay(1);
-			DSS_REG_W(mdss_dsi_base,
-				DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0f);
-			udelay(1000);
-			i++;
-		}
-	} while ((i < 3) && !pll_locked);
+				DSI_0_PHY_PLL_UNIPHY_PLL_CAL_CFG1, 0x34);
+		udelay(1);
+		DSS_REG_W(mdss_dsi_base,
+			DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0f);
+		udelay(1000);
+		pll_locked = dsi_pll_toggle_lock_detect_and_check_status();
+	}
 
 	if (pll_locked)
 		pr_debug("%s: PLL Locked at attempt #%d\n", __func__, i);
@@ -951,19 +963,19 @@ static int dsi_pll_enable_seq_d(void)
 	 * PLL to successfully lock
 	 */
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x01);
-	udelay(1);
+	udelay(200);
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x05);
-	udelay(1);
+	udelay(200);
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x07);
-	udelay(1);
+	udelay(200);
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x05);
-	udelay(1);
+	udelay(200);
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x07);
-	udelay(1);
+	udelay(200);
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0f);
-	udelay(1);
+	udelay(1000);
 
-	pll_locked = dsi_pll_lock_status();
+	pll_locked = dsi_pll_toggle_lock_detect_and_check_status();
 	pr_debug("%s: PLL status = %s\n", __func__,
 		pll_locked ? "Locked" : "Unlocked");
 
@@ -992,7 +1004,7 @@ static int dsi_pll_enable_seq_f1(void)
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0f);
 	udelay(1000);
 
-	pll_locked = dsi_pll_lock_status();
+	pll_locked = dsi_pll_toggle_lock_detect_and_check_status();
 	pr_debug("%s: PLL status = %s\n", __func__,
 		pll_locked ? "Locked" : "Unlocked");
 
@@ -1017,7 +1029,7 @@ static int dsi_pll_enable_seq_c(void)
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0f);
 	udelay(1000);
 
-	pll_locked = dsi_pll_lock_status();
+	pll_locked = dsi_pll_toggle_lock_detect_and_check_status();
 	pr_debug("%s: PLL status = %s\n", __func__,
 		pll_locked ? "Locked" : "Unlocked");
 
@@ -1040,10 +1052,11 @@ static int dsi_pll_enable_seq_e(void)
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x05);
 	udelay(200);
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0d);
+	udelay(1);
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0f);
 	udelay(1000);
 
-	pll_locked = dsi_pll_lock_status();
+	pll_locked = dsi_pll_toggle_lock_detect_and_check_status();
 	pr_debug("%s: PLL status = %s\n", __func__,
 		pll_locked ? "Locked" : "Unlocked");
 
@@ -1132,6 +1145,11 @@ static int dsi_pll_enable(struct clk *c)
 	int i, rc = 0;
 	struct dsi_pll_vco_clk *vco = to_vco_clk(c);
 
+	if (!mdss_gdsc_enabled()) {
+		pr_err("%s: mdss GDSC is not enabled\n", __func__);
+		return -EPERM;
+	}
+
 	rc = clk_enable(mdss_ahb_clk);
 	if (rc) {
 		pr_err("%s: failed to enable mdss ahb clock. rc=%d\n",
@@ -1158,6 +1176,12 @@ static int dsi_pll_enable(struct clk *c)
 static void dsi_pll_disable(struct clk *c)
 {
 	int rc = 0;
+
+	if (!mdss_gdsc_enabled()) {
+		pr_warn("%s: mdss GDSC disabled before disabling DSI PLL\n",
+			__func__);
+		return;
+	}
 
 	rc = clk_enable(mdss_ahb_clk);
 	if (rc) {
@@ -1472,8 +1496,10 @@ struct dsi_pll_vco_clk dsi_vco_clk_8226 = {
 };
 
 struct div_clk analog_postdiv_clk_8226 = {
-	.max_div = 255,
-	.min_div = 1,
+	.data = {
+		.max_div = 255,
+		.min_div = 1,
+	},
 	.ops = &analog_postdiv_ops,
 	.c = {
 		.parent = &dsi_vco_clk_8226.c,
@@ -1486,7 +1512,11 @@ struct div_clk analog_postdiv_clk_8226 = {
 
 struct div_clk indirect_path_div2_clk_8226 = {
 	.ops = &fixed_2div_ops,
-	.div = 2,
+	.data = {
+		.div = 2,
+		.min_div = 2,
+		.max_div = 2,
+	},
 	.c = {
 		.parent = &analog_postdiv_clk_8226.c,
 		.dbg_name = "indirect_path_div2_clk",
@@ -1497,8 +1527,10 @@ struct div_clk indirect_path_div2_clk_8226 = {
 };
 
 struct div_clk pixel_clk_src_8226 = {
-	.max_div = 255,
-	.min_div = 1,
+	.data = {
+		.max_div = 255,
+		.min_div = 1,
+	},
 	.ops = &digital_postdiv_ops,
 	.c = {
 		.parent = &dsi_vco_clk_8226.c,
@@ -1526,8 +1558,10 @@ struct mux_clk byte_mux_8226 = {
 
 struct div_clk byte_clk_src_8226 = {
 	.ops = &fixed_4div_ops,
-	.min_div = 4,
-	.max_div = 4,
+	.data = {
+		.min_div = 4,
+		.max_div = 4,
+	},
 	.c = {
 		.parent = &byte_mux_8226.c,
 		.dbg_name = "byte_clk_src",
@@ -1565,8 +1599,10 @@ struct dsi_pll_vco_clk dsi_vco_clk_8974 = {
 };
 
 struct div_clk analog_postdiv_clk_8974 = {
-	.max_div = 255,
-	.min_div = 1,
+	.data = {
+		.max_div = 255,
+		.min_div = 1,
+	},
 	.ops = &analog_postdiv_ops,
 	.c = {
 		.parent = &dsi_vco_clk_8974.c,
@@ -1579,7 +1615,11 @@ struct div_clk analog_postdiv_clk_8974 = {
 
 struct div_clk indirect_path_div2_clk_8974 = {
 	.ops = &fixed_2div_ops,
-	.div = 2,
+	.data = {
+		.div = 2,
+		.min_div = 2,
+		.max_div = 2,
+	},
 	.c = {
 		.parent = &analog_postdiv_clk_8974.c,
 		.dbg_name = "indirect_path_div2_clk",
@@ -1590,8 +1630,10 @@ struct div_clk indirect_path_div2_clk_8974 = {
 };
 
 struct div_clk pixel_clk_src_8974 = {
-	.max_div = 255,
-	.min_div = 1,
+	.data = {
+		.max_div = 255,
+		.min_div = 1,
+	},
 	.ops = &digital_postdiv_ops,
 	.c = {
 		.parent = &dsi_vco_clk_8974.c,
@@ -1619,8 +1661,10 @@ struct mux_clk byte_mux_8974 = {
 
 struct div_clk byte_clk_src_8974 = {
 	.ops = &fixed_4div_ops,
-	.min_div = 4,
-	.max_div = 4,
+	.data = {
+		.min_div = 4,
+		.max_div = 4,
+	},
 	.c = {
 		.parent = &byte_mux_8974.c,
 		.dbg_name = "byte_clk_src",
@@ -1993,20 +2037,12 @@ static unsigned long edp_mainlink_get_rate(struct clk *c)
 
 	pclk = clk_get_parent(c);
 
-#ifdef CONFIG_MACH_LGE
-		/* LGE_CHANGE
-		* Add exception handling case
-		* 2013-10-17
-		*/
-	if (pclk != NULL && pclk->ops->get_rate) {
-#else
 	if (pclk->ops->get_rate) {
-#endif
 		rate = pclk->ops->get_rate(pclk);
-		rate /= mclk->div;
+		rate /= mclk->data.div;
 	}
 
-	pr_debug("%s: rate=%d div=%d\n", __func__, (int)rate, mclk->div);
+	pr_debug("%s: rate=%d div=%d\n", __func__, (int)rate, mclk->data.div);
 
 	return rate;
 }
@@ -2016,7 +2052,9 @@ static struct clk_div_ops fixed_5div_ops; /* null ops */
 
 struct div_clk edp_mainlink_clk_src = {
 	.ops = &fixed_5div_ops,
-	.div = 5,
+	.data = {
+		.div = 5,
+	},
 	.c = {
 		.parent = &edp_vco_clk.c,
 		.dbg_name = "edp_mainlink_clk_src",
@@ -2074,8 +2112,10 @@ static struct clk_div_ops edp_pixel_ops = {
 };
 
 struct div_clk edp_pixel_clk_src = {
-	.max_div = 2,
-	.min_div = 1,
+	.data = {
+		.max_div = 2,
+		.min_div = 1,
+	},
 	.ops = &edp_pixel_ops,
 	.c = {
 		.parent = &edp_vco_clk.c,

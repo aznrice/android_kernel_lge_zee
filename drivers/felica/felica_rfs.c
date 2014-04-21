@@ -41,7 +41,7 @@ enum{
  */
 static int isopen = 0; // 0 : No open 1 : Open
 #ifdef FELICA_LED_SUPPORT
-static int isFelicaUsed = 0; /* 2012 02 26 LGE_UPDATE_S For DCM Felica LED Blincking */
+static int isFelicaUsed = 0; /*                                                      */
 #endif
 /*
  *   FUNCTION DEFINITION
@@ -90,16 +90,16 @@ static int invoke_led_service(void)
 		isFelicaUsed =0;
 	}
 	else	{
-    	#ifdef FEATURE_DEBUG_HIGH
-		//FELICA_DEBUG_MSG("[FELICA_RFS] Felica LED exception case ... do nothing \n");
+    	#ifdef FEATURE_DEBUG_MED
+		FELICA_DEBUG_MSG("[FELICA_RFS] Felica LED exception case ... do nothing \n");
 		FELICA_DEBUG_MSG("[FELICA_RFS] felica_gpio_read = %d , isFelicaUsed =%d \n",getvalue,isFelicaUsed);
 		#endif
 		unlock_felica_rfs_wake_lock();
-//#if defined(CONFIG_LGE_FELICA_ONLY)
-		FELICA_DEBUG_MSG("[FELICA_RFS] LED Off .... \n");
+#if defined(CONFIG_LGE_FELICA_ONLY)
+		FELICA_DEBUG_MSG("[FELICA_RFS] Felica LED ERROR case so LED Off ... \n");
 		rc = call_usermodehelper( argv_off[0], argv_off, envp, UMH_WAIT_PROC );
 		isFelicaUsed =0;
-//#endif
+#endif
 	}
 
 	#ifdef FEATURE_DEBUG_LOW

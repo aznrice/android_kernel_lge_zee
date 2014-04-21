@@ -86,7 +86,7 @@
 		qcom,sup-voltages = <1800 2950>;
 		qcom,bus-width = <4>;
 		qcom,xpc;
-		/* qcom,nonremovable; */
+		qcom,nonremovable;
 		qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50", "SDR104";
 		qcom,current-limit = <800>;
 

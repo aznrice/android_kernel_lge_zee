@@ -30,7 +30,7 @@
 			ti,pre-chg-current-ma = <256>;
 			ti,sys-vmin-mv = <3500>;
 			ti,vin-limit-mv = <4600>;
-			ti,icl-vbus-mv = <4610>;
+			ti,icl-vbus-mv = <4652>;
 
 			lge,no-init-cable = <0 0 0>;
 			lge,cable-mhl-1k = <5000 500 500>;
@@ -77,13 +77,6 @@
 		qcom,currentnow@3800 {
 			status = "ok";
 			revision = "...";
-		};
-	};
-
-	qcom,pm8941@1 {
-		qcom,leds@e200 {
-			status = "ok";
-			revision = "...rev_c";
 		};
 	};
 };

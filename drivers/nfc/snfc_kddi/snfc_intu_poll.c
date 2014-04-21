@@ -173,7 +173,7 @@ int snfc_intu_probe(struct device_node *np)
 		SNFC_DEBUG_MSG("[snfc_intu_poll] FAIL!! can not register snfc_intu_poll_init \n");
 		return rc;
 	}
-    snfc_gpios.gpio_intu = of_get_named_gpio_flags(np, "sony,intu-gpio", 0, NULL);
+       snfc_gpios.gpio_intu = of_get_named_gpio_flags(np, "sony,intu-gpio", 0, NULL);
 
 	rc = gpio_request(snfc_gpios.gpio_intu, "snfc_intu");
 	
@@ -192,7 +192,7 @@ int snfc_intu_probe(struct device_node *np)
 
 //	disable_irq_nosync(gpio_to_irq(snfc_gpios.gpio_intu));
 
-    irq_set_irq_wake(gpio_to_irq(snfc_gpios.gpio_intu),1);
+       irq_set_irq_wake(gpio_to_irq(snfc_gpios.gpio_intu),1);
 
 	init_waitqueue_head(&intuwq);
 

@@ -89,11 +89,6 @@ static irqreturn_t zw_pwrkey_release_irq_handler(int irq, void *ptr)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t zw_pwrkey_irq_dummy_hdr(int itq, void *ptr)
-{
-	return IRQ_HANDLED;
-}
-
 static inline void zw_pwrkey_irq_wake_disable_all(void)
 {
 	switch (zw_pwrkey.data->irq_type) {
@@ -177,33 +172,6 @@ static inline void zw_pwrkey_irq_handler_set(void)
 	}
 }
 
-static inline void zw_pwrkey_irq_dummy_hdr_set(void)
-{
-	switch (zw_pwrkey.data->irq_type) {
-	case ZW_PWRKEY_UNITE_IRQ:
-		if (zw_pwrkey.u->state_irq_handler) {
-			set_irq_handler(zw_pwrkey.u->state_irq,
-					zw_pwrkey_irq_dummy_hdr);
-		}
-		break;
-
-	case ZW_PWRKEY_SEPERATE_IRQ:
-		if (zw_pwrkey.s->press_irq_handler) {
-			set_irq_handler(zw_pwrkey.s->press_irq,
-					zw_pwrkey_irq_dummy_hdr);
-		}
-
-		if (zw_pwrkey.s->release_irq_handler) {
-			set_irq_handler(zw_pwrkey.s->release_irq,
-					zw_pwrkey_irq_dummy_hdr);
-		}
-		break;
-
-	default:
-		break;
-	}
-}
-
 static inline void zw_pwrkey_irq_handler_clean(void)
 {
 	switch (zw_pwrkey.data->irq_type) {
@@ -241,7 +209,6 @@ void zw_pwrkey_set(int state)
 {
 	switch (state) {
 	case ZW_STATE_ON_SYSTEM:
-		zw_pwrkey_irq_dummy_hdr_set();
 		zw_pwrkey_irq_wake_disable_all();
 		break;
 

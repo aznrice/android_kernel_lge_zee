@@ -10,10 +10,54 @@
 #include "snfc_available_poll.h"
 #include <linux/delay.h>
 #include <mach/board_lge.h>
+//#include <linux/interrupt.h>
+#include <linux/wait.h>
+#include <linux/sched.h>
+//#include <linux/irq.h>
+#include <linux/list.h>
+#include <linux/gpio.h>
+#include <linux/errno.h>
 
 extern struct snfc_gp snfc_gpios;
 extern int koto_state;
-int snfc_poll_check_sleep_value = 1000;
+extern struct snfc_i2c_dev snfc_i2c_dev;
+
+wait_queue_head_t snfcpollavailwq;
+int snfcpollavail_sig;
+
+void snfc_avali_poll_rfs_status(void)
+{
+    snfcpollavail_sig = 1;
+    wake_up(&snfcpollavailwq); 
+}
+EXPORT_SYMBOL(snfc_avali_poll_rfs_status);
+void snfc_avali_poll_cen_status(int cen_status)
+{
+    snfcpollavail_sig = 1;
+    wake_up(&snfcpollavailwq); 
+}
+void snfc_avali_poll_felica_status(void)
+{
+    snfcpollavail_sig = 1;
+    wake_up(&snfcpollavailwq); 
+}
+int snfc_hvdd_wait_rfs_low(void)
+{
+    int rc = 0;
+
+    do{        
+        snfcpollavail_sig = 0;
+        if( snfc_gpio_read(snfc_gpios.gpio_rfs) == GPIO_HIGH_VALUE ){
+            snfc_gpio_write(snfc_gpios.gpio_uicc_con ,GPIO_HIGH_VALUE );
+        } else {
+            snfc_gpio_write(snfc_gpios.gpio_uicc_con ,GPIO_LOW_VALUE );
+            break;
+        }        
+        rc = wait_event_interruptible( snfcpollavailwq, snfcpollavail_sig);
+    }while(rc != -ERESTARTSYS);
+    
+    return rc;
+}
 /*
  * Description: 
  * Input: 
@@ -27,6 +71,7 @@ static int __snfc_avail_poll_get_rfs_status(void)
 
 	return return_val;
 }
+
 /*
  * Description: 
  * Input: 
@@ -38,7 +83,7 @@ static int __snfc_avail_poll_get_cen_status(void)
 	unsigned char read_buf = 0x00;
 	int cen_status;
 	
-	rc = snfc_i2c_read(0x02, &read_buf, 1);
+	rc = snfc_i2c_read(0x02, &read_buf, 1, snfc_i2c_dev.client);
 	if(rc)
 	{
 		SNFC_DEBUG_MSG("[__snfc_avail_poll_get_cen_status] snfc_i2c_read : %d \n",rc);
@@ -67,8 +112,19 @@ static int __snfc_avail_poll_get_cen_status(void)
 static int snfc_avail_poll_open (struct inode *inode, struct file *fp)
 {
 	int rc = 0;
+	int rfs_status = -1, cen_status = -1, uart_status = -1;
 
 	SNFC_DEBUG_MSG_LOW("[snfc_avail_poll] snfc_avail_poll_open - start \n");
+    
+    rfs_status = __snfc_avail_poll_get_rfs_status();
+    cen_status = __snfc_avail_poll_get_cen_status();
+    uart_status = __snfc_uart_control_get_uart_status();
+
+    if(rfs_status == GPIO_HIGH_VALUE && cen_status == GPIO_HIGH_VALUE && uart_status != UART_STATUS_FOR_FELICA){
+        snfcpollavail_sig = 1;
+    } else {
+        snfcpollavail_sig = 0;
+    }
 
 	SNFC_DEBUG_MSG_LOW("[snfc_avail_poll] snfc_avail_poll_open - end \n");
 
@@ -103,8 +159,6 @@ static ssize_t snfc_avail_poll_read(struct file *pf, char *pbuf, size_t size, lo
 	int available_poll = -1;
 	int rc = -1;
 	int rfs_status = -1, cen_status = -1, uart_status = -1;
-	int loop_cnt;
-	//unsigned char restart_value=0;
 	
 	SNFC_DEBUG_MSG_LOW("[snfc_avail_poll] snfc_avail_poll_read - start \n");
 
@@ -115,29 +169,36 @@ static ssize_t snfc_avail_poll_read(struct file *pf, char *pbuf, size_t size, lo
 		return -1;    
 	}
 
-	loop_cnt=0;
-
 	do{
-		loop_cnt++;
-		rfs_status = __snfc_avail_poll_get_rfs_status();
-		cen_status = __snfc_avail_poll_get_cen_status();
-		uart_status = __snfc_uart_control_get_uart_status();
-		if(loop_cnt == 1000)
-		{
-			SNFC_DEBUG_MSG_MIDDLE("[snfc_avail_poll] current rfs_status : %d, cen_status : %d, uart_status : %d \n",rfs_status, cen_status, uart_status);
-			loop_cnt = 0;
-		}
-		if(rfs_status == GPIO_HIGH_VALUE && cen_status == GPIO_HIGH_VALUE && uart_status != UART_STATUS_FOR_FELICA)
-			break;
-        if(koto_state == 10)
-            break;
-        
-		usleep(snfc_poll_check_sleep_value);
-	}while(loop);
+               rc = 0;       
+		 cen_status = __snfc_avail_poll_get_cen_status();
+               uart_status = __snfc_uart_control_get_uart_status();
+		 rfs_status = __snfc_avail_poll_get_rfs_status();
+		
+		 SNFC_DEBUG_MSG_MIDDLE("[snfc_avail_poll] current rfs_status : %d, cen_status : %d, uart_status : %d \n",rfs_status, cen_status, uart_status);
+		 if(rfs_status == GPIO_HIGH_VALUE && cen_status == GPIO_HIGH_VALUE && uart_status != UART_STATUS_FOR_FELICA)
+	        {      
+	            available_poll = 1;
+	            rc = copy_to_user(pbuf, &available_poll, size);
 
-	available_poll = 1;
+		     SNFC_DEBUG_MSG_LOW("[snfc_avail_poll] snfc_avail_poll_read stop, polling available!! \n");
+	            return 1;
+	        } else {
+	            snfcpollavail_sig = 0;
+	        }
+	        if(koto_state == 10)
+	            break;   
 
-	rc = copy_to_user(pbuf, &available_poll, size);
+		 if( rfs_status != GPIO_HIGH_VALUE /*&& cen_status == GPIO_HIGH_VALUE && uart_status != UART_STATUS_FOR_FELICA*/){
+	            rc = wait_event_interruptible_timeout( snfcpollavailwq, snfcpollavail_sig, 1000*1000 );
+	        } else {
+	            rc = wait_event_interruptible( snfcpollavailwq, snfcpollavail_sig );
+	        }
+	        
+	        if ( rc == -ERESTARTSYS)
+	            return -1;
+	 }while(loop == 1 && rc >= 0);
+
 	
 	SNFC_DEBUG_MSG_LOW("[snfc_avail_poll] snfc_avail_poll_read - end \n");
 
@@ -169,6 +230,9 @@ int snfc_avail_poll_probe(struct device_node *np)
 		return rc;
 	}
 
+    init_waitqueue_head(&snfcpollavailwq);
+//    init_waitqueue_head(&snfcpollavailcenwq);
+//    init_waitqueue_head(&snfcpollavailfelicawq);
     return rc;
 }
 void snfc_avail_poll_remove(void)

@@ -216,8 +216,11 @@ int dwc3_gadget_resize_tx_fifos(struct dwc3 *dwc)
 		if (((dep->endpoint.maxburst > 1) &&
 				usb_endpoint_xfer_bulk(dep->endpoint.desc))
 				|| usb_endpoint_xfer_isoc(dep->endpoint.desc))
-			mult = 8; //3
-
+#ifdef CONFIG_USB_G_LGE_ANDROID
+			mult = 8;
+#else
+			mult = 3;
+#endif
 		/*
 		 * REVISIT: the following assumes we will always have enough
 		 * space available on the FIFO RAM for all possible use cases.
@@ -1531,10 +1534,10 @@ static int dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on)
 {
 	u32			reg;
 	u32			timeout = 500;
+	ktime_t start, diff;
 #if defined CONFIG_USB_G_LGE_ANDROID_PFSC && defined CONFIG_LGE_PM
 	enum lge_boot_mode_type boot_mode;
 #endif
-	ktime_t start, diff;
 
 	reg = dwc3_readl(dwc->regs, DWC3_DCTL);
 	if (is_on) {
@@ -2779,7 +2782,8 @@ static irqreturn_t dwc3_process_event_buf(struct dwc3 *dwc, u32 buf)
 
 		dwc3_writel(dwc->regs, DWC3_GEVNTCOUNT(buf), 4);
 #ifdef CONFIG_USB_LGE_RELIABILITY
-        if (left <= 0) break;
+		if (left <= 0)
+			break;
 #endif
 	}
 
@@ -2858,6 +2862,7 @@ int __devinit dwc3_gadget_init(struct dwc3 *dwc)
 	|| defined(CONFIG_MACH_MSM8974_G2_KDDI)\
 	|| defined(CONFIG_MACH_MSM8974_G2_OPEN_AME)\
 	|| defined(CONFIG_MACH_MSM8974_G2_OPEN_COM)\
+	|| defined(CONFIG_MACH_MSM8974_G2_OPT_AU) \
 	|| defined(CONFIG_MACH_MSM8974_G2_TEL_AU)\
 	|| defined(CONFIG_MACH_MSM8974_VU3_KR)
 	dwc->gadget.max_speed		= USB_SPEED_HIGH;
@@ -2923,7 +2928,11 @@ int __devinit dwc3_gadget_init(struct dwc3 *dwc)
 
 		dwc3_writel(dwc->regs, DWC3_DCTL, reg);
 
-		dwc3_gadget_usb2_phy_suspend(dwc, true);
+		/*
+		 * Clear autosuspend bit in dwc3 register for USB2. It will be
+		 * enabled before setting run/stop bit.
+		 */
+		dwc3_gadget_usb2_phy_suspend(dwc, false);
 		dwc3_gadget_usb3_phy_suspend(dwc, true);
 	}
 

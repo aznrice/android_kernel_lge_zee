@@ -468,10 +468,3 @@ config SND_SOC_ES325_SLIM
 	default n
 	help
 		Audience es325 Dual Mic Noise Reduction
-
-# LGE_BSP_AUDIO, BOARD_USE_REMOVE_TOUCH_NOISE, for remove aux noise
-config USE_REMOVE_TOUCH_TA_NOISE
-	bool "LGE remove touch noise"
-	default n
-	help
-		LGE remove touch noise
