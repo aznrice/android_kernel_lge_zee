@@ -30,7 +30,6 @@ function gettop
     fi
 }
 
-
 KERNEL_PATH=$(gettop)
 eval DTS_NAME=msm8974-z-att
 
