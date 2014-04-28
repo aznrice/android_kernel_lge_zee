@@ -594,7 +594,7 @@ static int clock_krait_8974_driver_probe(struct platform_device *pdev)
 	char prop_name[] = "qcom,speedXX-pvsXX-bin-vXX";
 	unsigned long *freq, cur_rate, aux_rate;
 	int *uv, *ua;
-	u32 *dscr, vco_mask, config_val;
+	u32 *dscr = NULL, vco_mask, config_val;
 	int ret;
 
 	vdd_l2.regulator[0] = devm_regulator_get(dev, "l2-dig");
