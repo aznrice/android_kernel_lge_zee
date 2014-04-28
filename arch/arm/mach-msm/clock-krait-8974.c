@@ -592,7 +592,7 @@ static int clock_krait_8974_driver_probe(struct platform_device *pdev)
 	struct clk *c;
 	int speed, pvs, ver, rows, cpu;
 	char prop_name[] = "qcom,speedXX-pvsXX-bin-vXX";
-	unsigned long *freq, cur_rate, aux_rate;
+	unsigned long *freq = NULL, cur_rate, aux_rate;
 	int *uv = NULL, *ua = NULL;
 	u32 *dscr = NULL, vco_mask, config_val;
 	int ret;
